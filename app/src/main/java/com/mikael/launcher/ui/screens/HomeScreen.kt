@@ -94,7 +94,6 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit) {
         Spacer(Modifier.height(16.dp))
         HeroPanel(
             selectedVersion = selectedVersion,
-            hasProfiles = versionProfiles.isNotEmpty(),
             onChooseVersion = { showVersionPicker = true },
             onStart = { showStartNotice = true },
             onExplore = { onNavigate(LauncherSection.VERSIONS) }
@@ -200,7 +199,7 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit) {
 }
 
 @Composable
-private fun HeroPanel(selectedVersion: String, hasProfiles: Boolean, onChooseVersion: () -> Unit, onStart: () -> Unit, onExplore: () -> Unit) {
+private fun HeroPanel(selectedVersion: String, onChooseVersion: () -> Unit, onStart: () -> Unit, onExplore: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
