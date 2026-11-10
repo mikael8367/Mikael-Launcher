@@ -171,7 +171,6 @@ private fun PlayScreen() {
     }
 }
 
-@Composable
 private data class MinecraftCatalogVersion(
     val id: String,
     val type: String,
