@@ -248,8 +248,8 @@ private fun HeroPanel(selectedVersion: String, hasProfiles: Boolean, onChooseVer
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AnimatedLauncherButton(text = "▶  Iniciar", onClick = onStart, enabled = hasProfiles)
-                androidx.compose.material3.OutlinedButton(onClick = onExplore) { Text("Versões") }
+                AnimatedLauncherButton(text = "▶  Iniciar", onClick = onStart)
+                AnimatedLauncherButton(text = "Versões", onClick = onExplore)
             }
         }
         Box(
