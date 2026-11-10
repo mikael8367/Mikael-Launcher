@@ -75,3 +75,12 @@ O APK de depuração será produzido em `app/build/outputs/apk/debug/`. Nenhum A
 - Renderizadores apresentados na interface: GL4ES, Zink, VirGL, ANGLE, Vulkan experimental e Software.
 - As escolhas de runtime e renderizador são preferências nesta etapa; os binários, downloads, validação de compatibilidade e ativação real ainda precisam ser conectados ao motor Android.
 - O assistente inicial aparece uma vez após a primeira abertura e a escolha fica salva no armazenamento privado do aplicativo.
+
+## Catálogo de versões do Minecraft Java
+- Consulta o manifesto oficial de versões da Mojang pela internet.
+- Categorias: Recentes (releases), Snapshots, Beta, Alpha, Primeiro de abril e Todas.
+- Pesquisa pelo identificador da versão e exibição da data de lançamento quando disponível.
+- Seleção da versão antes de criar um perfil local.
+- Inclui versões históricas e snapshots especiais quando publicados no manifesto oficial.
+- A lista depende de conexão com a internet; há estado de carregamento, mensagem de erro e opção de tentar novamente.
+- **Limite atual:** criar um perfil salva a seleção no aparelho, mas ainda não baixa o cliente, bibliotecas, assets ou arquivos nativos do Minecraft. O instalador real será implementado em outra etapa.
