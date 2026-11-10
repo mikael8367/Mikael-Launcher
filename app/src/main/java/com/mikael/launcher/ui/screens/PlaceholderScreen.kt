@@ -201,6 +201,9 @@ private suspend fun fetchMinecraftVersions(): List<MinecraftCatalogVersion> = wi
 private fun isAprilFoolsVersion(id: String): Boolean {
     val normalized = id.lowercase()
     return normalized.contains("20w14") ||
+        normalized.contains("22w13") ||
+        normalized.contains("3d shareware") ||
+        normalized == "2.0" ||
         normalized.contains("23w13") ||
         normalized.contains("24w14") ||
         normalized.contains("25w14") ||
