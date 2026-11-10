@@ -67,3 +67,11 @@ O APK de depuração será produzido em `app/build/outputs/apk/debug/`. Nenhum A
 - Primeira página carregada automaticamente e paginação incremental ao rolar a lista.
 - A chave CurseForge é guardada no armazenamento privado do aplicativo; não é incluída no código-fonte.
 - A listagem é de descoberta; baixar, validar dependências e instalar mods ainda exigem a próxima etapa de integração.
+
+## Configurações avançadas e runtimes
+- Assistente de primeira inicialização para escolher uma família de runtime Java e o renderizador gráfico preferido.
+- Preferências de runtime, renderizador, limite de RAM e argumentos JVM salvas localmente.
+- Opções visuais, isolamento de perfis, verificações de mods, backups, desempenho, rede, downloads, armazenamento, privacidade, acessibilidade e diagnóstico.
+- Renderizadores apresentados na interface: GL4ES, Zink, VirGL, ANGLE, Vulkan experimental e Software.
+- As escolhas de runtime e renderizador são preferências nesta etapa; os binários, downloads, validação de compatibilidade e ativação real ainda precisam ser conectados ao motor Android.
+- O assistente inicial aparece uma vez após a primeira abertura e a escolha fica salva no armazenamento privado do aplicativo.
