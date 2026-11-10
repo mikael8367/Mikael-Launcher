@@ -11,7 +11,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,11 +26,17 @@ import com.mikael.launcher.ui.components.LauncherSidebar
 import com.mikael.launcher.ui.screens.AccountsScreen
 import com.mikael.launcher.ui.screens.HomeScreen
 import com.mikael.launcher.ui.screens.PlaceholderScreen
+import com.mikael.launcher.ui.screens.FirstRunRuntimeDialog
+import com.mikael.launcher.ui.screens.LAUNCHER_PREFS
+import com.mikael.launcher.ui.screens.PREF_FIRST_RUN_DONE
 import com.mikael.launcher.ui.components.AccountHeader
 import com.mikael.launcher.ui.theme.Background
 
 @Composable
 fun LauncherScaffold(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val setupPrefs = remember { context.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE) }
+    var showRuntimeSetup by remember { mutableStateOf(!setupPrefs.getBoolean(PREF_FIRST_RUN_DONE, false)) }
     var selected by rememberSaveable { mutableStateOf(LauncherSection.HOME.name) }
     var sidebarExpanded by rememberSaveable { mutableStateOf(true) }
     var accountNames by rememberSaveable { mutableStateOf("") }
@@ -76,5 +86,8 @@ fun LauncherScaffold(modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+    if (showRuntimeSetup) {
+        FirstRunRuntimeDialog(onFinished = { showRuntimeSetup = false })
     }
 }
