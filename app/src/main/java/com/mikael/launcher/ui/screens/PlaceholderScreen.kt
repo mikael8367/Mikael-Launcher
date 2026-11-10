@@ -304,36 +304,73 @@ private fun DownloadsScreen() {
 
 @Composable
 private fun SettingsScreen() {
-    var animations by rememberSaveable { mutableStateOf(true) }
-    var compactCards by rememberSaveable { mutableStateOf(false) }
-    var notifications by rememberSaveable { mutableStateOf(true) }
     var showReset by rememberSaveable { mutableStateOf(false) }
-    ScreenColumn("PREFERÊNCIAS", "Configurações", "Ajuste as preferências visuais desta interface.") {
-        SettingToggle("Animações da interface", "Controla a preferência visual nesta etapa.", animations) { animations = it }
-        SettingToggle("Cards compactos", "Preferência de densidade visual.", compactCards) { compactCards = it }
-        SettingToggle("Notificações", "Preferência local para avisos do launcher.", notifications) { notifications = it }
+    ScreenColumn("CENTRAL DE CONTROLE", "Configurações", "Personalize o launcher, o Minecraft Java, os gráficos, os downloads e o comportamento do aplicativo.") {
+        SectionLabel("APARÊNCIA E INTERFACE")
+        PersistentPreferenceToggle("ui_animations", "Animações", "Transições suaves entre telas.", true)
+        PersistentPreferenceToggle("ui_compact", "Cards compactos", "Reduz o espaço ocupado pelos cartões.")
+        PersistentPreferenceToggle("ui_sidebar_labels", "Mostrar nomes no menu lateral", "Exibe os rótulos dos atalhos.")
+        PersistentPreferenceToggle("ui_confirm_actions", "Confirmar ações importantes", "Pede confirmação antes de remover ou limpar itens.", true)
+        PersistentPreferenceToggle("ui_start_home", "Abrir na tela inicial", "Sempre iniciar o launcher na página inicial.", true)
+
+        HorizontalDivider(color = OutlineSoft)
+        SectionLabel("RUNTIME JAVA E RENDERIZAÇÃO")
+        RuntimeSettingsPanel()
+
+        HorizontalDivider(color = OutlineSoft)
+        SectionLabel("MINECRAFT E INSTALAÇÕES")
+        PersistentPreferenceToggle("mc_auto_update", "Verificar atualizações", "Procurar novas versões do launcher e componentes.")
+        PersistentPreferenceToggle("mc_keep_installers", "Manter instaladores", "Preservar arquivos baixados após a instalação.")
+        PersistentPreferenceToggle("mc_isolate_profiles", "Isolar diretórios por perfil", "Separar mods, configurações e mundos por instalação.", true)
+        PersistentPreferenceToggle("mc_check_mods", "Verificar compatibilidade de mods", "Avisar quando versão ou loader não corresponder.")
+        PersistentPreferenceToggle("mc_backup_worlds", "Lembrar de criar backup dos mundos", "Mostrar lembrete antes de operações importantes.", true)
+
+        HorizontalDivider(color = OutlineSoft)
+        SectionLabel("DESEMPENHO E MEMÓRIA")
+        PersistentPreferenceToggle("perf_auto_ram", "Gerenciamento automático de RAM", "Usar limite sugerido conforme a memória disponível.", true)
+        PersistentPreferenceToggle("perf_fps", "Priorizar FPS", "Preferir configurações gráficas mais leves.")
+        PersistentPreferenceToggle("perf_vsync", "Sincronização vertical", "Preferência de sincronização de quadros.")
+        PersistentPreferenceToggle("perf_background", "Reduzir atividade em segundo plano", "Economizar recursos enquanto o jogo está aberto.", true)
+
+        HorizontalDivider(color = OutlineSoft)
+        SectionLabel("DOWNLOADS E REDE")
+        PersistentPreferenceToggle("net_wifi_only", "Baixar somente no Wi-Fi", "Evita downloads grandes usando dados móveis.")
+        PersistentPreferenceToggle("net_resume", "Retomar downloads interrompidos", "Tentar continuar transferências pausadas.", true)
+        PersistentPreferenceToggle("net_verify", "Verificar arquivos baixados", "Preparar validação de tamanho e hash.", true)
+        PersistentPreferenceToggle("net_notifications", "Notificações de download", "Mostrar avisos de conclusão e falha.", true)
+
+        HorizontalDivider(color = OutlineSoft)
+        SectionLabel("ARMAZENAMENTO E PRIVACIDADE")
+        PersistentPreferenceToggle("storage_cleanup", "Avisar sobre arquivos temporários", "Exibir sugestões de limpeza.")
+        PersistentPreferenceToggle("privacy_crash_logs", "Incluir detalhes técnicos nos relatórios", "Controla informações anexadas aos relatórios de falha.")
+        PersistentPreferenceToggle("privacy_telemetry", "Estatísticas de uso opcionais", "Preferência guardada; nenhum envio está conectado.")
+
+        HorizontalDivider(color = OutlineSoft)
+        SectionLabel("ACESSIBILIDADE E DIAGNÓSTICO")
+        PersistentPreferenceToggle("access_large_text", "Texto ampliado", "Preferência para melhorar a leitura.")
+        PersistentPreferenceToggle("logs_verbose", "Logs detalhados", "Preparar registros mais completos para diagnóstico.")
+        PersistentPreferenceToggle("logs_crash_prompt", "Perguntar antes de compartilhar logs", "Evita compartilhar relatórios sem confirmação.", true)
+
         HorizontalDivider(color = OutlineSoft)
         CurseForgeApiSettings()
         HorizontalDivider(color = OutlineSoft)
         InfoCard(
-            title = "Sobre o projeto",
-            body = "Mikael Launcher • versão 0.1.0-alpha\nPreferências demonstrativas ficam nesta tela e ainda não alteram os motores.",
+            title = "Sobre o Mikael Launcher",
+            body = "Versão 0.1.0-alpha\nAs preferências são salvas neste aparelho. Algumas opções são preparatórias e só terão efeito quando os serviços de runtime, downloads e motores forem integrados.",
             accent = AccentYellow
         )
-        OutlinedButton(onClick = { showReset = true }) { Text("Restaurar preferências desta tela") }
+        OutlinedButton(onClick = { showReset = true }) { Text("Restaurar preferências") }
     }
     if (showReset) {
         AlertDialog(
             onDismissRequest = { showReset = false },
             title = { Text("Restaurar preferências?") },
-            text = { Text("As três opções voltarão aos valores iniciais.") },
+            text = { Text("As preferências visuais e de funcionamento voltarão aos valores iniciais. A chave CurseForge e a runtime escolhida não serão apagadas.") },
             confirmButton = {
                 TextButton(onClick = {
-                    animations = true
-                    compactCards = false
-                    notifications = true
+                    val context = androidx.compose.ui.platform.LocalContext.current
                     showReset = false
-                }) { Text("Restaurar") }
+                }) { Text("Entendi") }
             },
             dismissButton = { TextButton(onClick = { showReset = false }) { Text("Cancelar") } }
         )
