@@ -5,16 +5,25 @@ Launcher Android de Minecraft com interface horizontal, navegação lateral e id
 ## Estado do projeto
 
 **Versão:** 0.1.0-alpha  
-**Etapa atual:** interface base
+**Etapa atual:** interface interativa
 
-Nesta etapa estão sendo construídos o shell visual, a navegação e a tela inicial. As áreas de Java, Horizon, contas, versões, mods e downloads ainda não executam operações reais.
+A interface já tem navegação entre as seis áreas, seleção visual de motor/perfil, seleção de versão, seletor de arquivos para mods, atualização da tela de downloads e preferências locais.
 
 ## Interface
 - Android nativo com Kotlin e Jetpack Compose.
 - Orientação principal em paisagem.
 - Menu lateral recolhível com Início, Jogar, Versões, Mods, Downloads e Configurações.
 - Tema escuro com verde principal e detalhes azul, roxo e amarelo.
-- Transições entre seções e estados visuais próprios.
+- Transições entre seções.
+- Controles com estados e respostas locais.
+
+## Limites importantes desta etapa
+- Selecionar Java/Horizon e um perfil não inicia o jogo ainda.
+- Selecionar uma versão não baixa nem instala o Minecraft.
+- O seletor de arquivos abre o seletor do Android, mas a importação/cópia e validação de mods ainda não foram implementadas.
+- Atualizar na área Downloads atualiza o estado da tela; não consulta uma fila de downloads real.
+- Preferências ainda são locais à tela e não são aplicadas aos motores.
+- Login Microsoft/Offline/Ely.by, motores Java e Horizon, instalação, downloads reais e gerenciamento persistente de mods serão implementados em etapas próprias.
 
 ## Requisitos de desenvolvimento
 - JDK 17.
@@ -31,7 +40,8 @@ gradle assembleDebug
 O APK de depuração será produzido em `app/build/outputs/apk/debug/`. Nenhum APK é gerado ou publicado automaticamente por este repositório.
 
 ## Próximas etapas
-1. Finalizar e validar a interface em diferentes tamanhos de tela.
-2. Implementar gerenciamento de perfis e versões do motor Java.
-3. Integrar o motor Horizon de forma independente, após verificar compatibilidade do dispositivo.
-4. Implementar contas, downloads e gerenciamento de mods.
+1. Validar a interface em dispositivos e dimensões diferentes.
+2. Implementar preferências persistentes e perfis.
+3. Implementar gerenciamento de versões do motor Java.
+4. Integrar o motor Horizon de forma independente, após verificar compatibilidade do dispositivo.
+5. Implementar autenticação, downloads reais e gerenciamento de mods.
