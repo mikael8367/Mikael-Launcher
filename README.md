@@ -58,3 +58,12 @@ O APK de depuração será produzido em `app/build/outputs/apk/debug/`. Nenhum A
 - Minecraft Java e Horizon Rust continuam apresentados como motores separados.
 
 **Limites desta etapa:** o avatar ainda é ilustrativo e não baixa a skin real; Microsoft e Ely.by ainda não autenticam; perfis locais são estado de interface, não tokens de sessão oficiais. A integração segura de OAuth, consulta de skin e persistência definitiva será feita na etapa de lógica.
+
+## Catálogo de mods
+- Catálogo integrado com a API pública do Modrinth.
+- Pesquisa opcional na API CurseForge usando uma chave informada pelo usuário nas Configurações.
+- Filtros por versão do Minecraft e loader (Forge, Fabric, NeoForge, Quilt ou todos).
+- Fonte selecionável: Modrinth, CurseForge ou ambos.
+- Primeira página carregada automaticamente e paginação incremental ao rolar a lista.
+- A chave CurseForge é guardada no armazenamento privado do aplicativo; não é incluída no código-fonte.
+- A listagem é de descoberta; baixar, validar dependências e instalar mods ainda exigem a próxima etapa de integração.
