@@ -154,3 +154,24 @@ private fun SelectableRuntimeRow(label: String, selected: Boolean, onClick: () -
         }
     }
 }
+
+
+@Composable
+fun PersistentPreferenceToggle(key: String, title: String, description: String, defaultValue: Boolean = false) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE) }
+    var checked by remember(key) { mutableStateOf(prefs.getBoolean(key, defaultValue)) }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = TextPrimary, fontWeight = FontWeight.Medium, fontSize = 12.sp)
+            Text(description, color = TextSecondary, fontSize = 10.sp)
+        }
+        Switch(checked = checked, onCheckedChange = {
+            checked = it
+            prefs.edit().putBoolean(key, it).apply()
+        })
+    }
+}
