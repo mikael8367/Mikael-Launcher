@@ -22,6 +22,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import java.net.URL
+import org.json.JSONObject
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.CloudDownload
@@ -164,92 +171,226 @@ private fun PlayScreen() {
 }
 
 @Composable
+private data class MinecraftCatalogVersion(
+    val id: String,
+    val type: String,
+    val releaseTime: String
+)
+
+private const val MOJANG_VERSION_MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+
+private suspend fun fetchMinecraftVersions(): List<MinecraftCatalogVersion> = withContext(Dispatchers.IO) {
+    val connection = URL(MOJANG_VERSION_MANIFEST).openConnection()
+    connection.connectTimeout = 15000
+    connection.readTimeout = 20000
+    connection.setRequestProperty("User-Agent", "MikaelLauncher/0.1.0")
+    try {
+        val json = connection.getInputStream().bufferedReader().use { it.readText() }
+        val versions = JSONObject(json).getJSONArray("versions")
+        buildList {
+            for (index in 0 until versions.length()) {
+                val item = versions.getJSONObject(index)
+                add(MinecraftCatalogVersion(item.getString("id"), item.getString("type"), item.optString("releaseTime")))
+            }
+        }
+    } finally {
+        connection.getInputStream().close()
+    }
+}
+
+private fun isAprilFoolsVersion(id: String): Boolean {
+    val normalized = id.lowercase()
+    return normalized.contains("20w14") ||
+        normalized.contains("23w13") ||
+        normalized.contains("24w14") ||
+        normalized.contains("25w14") ||
+        normalized.contains("26w14") ||
+        normalized.contains("infinite") ||
+        normalized.contains("potato") ||
+        normalized.contains("craftmine")
+}
+
+@Composable
 private fun VersionsScreen() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("mikael_launcher_preferences", Context.MODE_PRIVATE) }
     var engine by rememberSaveable { mutableStateOf("Java") }
-    var version by rememberSaveable { mutableStateOf("1.12.2") }
+    var selectedVersion by rememberSaveable { mutableStateOf("1.12.2") }
+    var selectedTab by rememberSaveable { mutableStateOf("Recentes") }
+    var searchText by rememberSaveable { mutableStateOf("") }
     var showInfo by rememberSaveable { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var catalog by remember { mutableStateOf<List<MinecraftCatalogVersion>>(emptyList()) }
     var profiles by remember {
-        mutableStateOf(prefs.getString("launcher_version_profiles", "").orEmpty().split("\n").filter { it.isNotBlank() })
+        mutableStateOf(prefs.getString("launcher_version_profiles", "").orEmpty().split("\\n").filter { it.isNotBlank() })
     }
     var selectedProfile by remember {
         mutableStateOf(prefs.getString("launcher_selected_version_profile", "").orEmpty())
+    }
+
+    LaunchedEffect(engine) {
+        if (engine == "Java" && catalog.isEmpty() && !loading) {
+            loading = true
+            loadError = null
+            try {
+                catalog = fetchMinecraftVersions()
+            } catch (error: Exception) {
+                loadError = error.message ?: "Não foi possível consultar o catálogo da Mojang."
+            } finally {
+                loading = false
+            }
+        }
     }
 
     fun saveProfiles(updated: List<String>, selected: String) {
         profiles = updated.distinct()
         selectedProfile = selected
         prefs.edit()
-            .putString("launcher_version_profiles", profiles.joinToString("\n"))
+            .putString("launcher_version_profiles", profiles.joinToString("\\n"))
             .putString("launcher_selected_version_profile", selectedProfile)
             .apply()
     }
 
-    ScreenColumn("GERENCIAMENTO", "Versões", "Crie perfis de instalação e escolha qual aparecerá na tela inicial.") {
+    val filteredVersions = remember(catalog, selectedTab, searchText) {
+        catalog.filter { item ->
+            val tabMatches = when (selectedTab) {
+                "Recentes" -> item.type == "release"
+                "Snapshots" -> item.type == "snapshot" && !isAprilFoolsVersion(item.id)
+                "Beta" -> item.type == "old_beta"
+                "Alpha" -> item.type == "old_alpha"
+                "Primeiro de abril" -> isAprilFoolsVersion(item.id)
+                else -> true
+            }
+            tabMatches && (searchText.isBlank() || item.id.contains(searchText.trim(), ignoreCase = true))
+        }
+    }
+
+    ScreenColumn("GERENCIAMENTO", "Instalar versão", "Consulte as versões oficiais do Minecraft e organize suas instalações por categoria.") {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Java", "Horizon").forEach {
                 FilterChip(selected = engine == it, onClick = {
                     engine = it
-                    version = if (it == "Java") "1.12.2" else "Horizon"
+                    if (it == "Horizon") selectedVersion = "Horizon Rust"
                 }, label = { Text(it) })
             }
         }
-        SectionLabel("VERSÕES DISPONÍVEIS PARA CONFIGURAÇÃO")
-        val options = if (engine == "Java") listOf("1.12.2", "1.16.5", "1.20.1", "1.21.1") else listOf("Horizon")
-        options.forEach { option ->
-            SelectableRow(
-                title = option,
-                subtitle = if (engine == "Java") "Minecraft Java • perfil ainda não instalado" else "Horizon Rust • motor independente",
-                selected = version == option,
-                onClick = { version = option }
+
+        if (engine == "Java") {
+            SectionLabel("CATÁLOGO OFICIAL • MOJANG")
+            BasicTextField(
+                value = searchText,
+                onValueChange = { searchText = it },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary),
+                modifier = Modifier.fillMaxWidth().background(PanelSurface, RoundedCornerShape(12.dp)).padding(13.dp),
+                decorationBox = { inner ->
+                    Box {
+                        if (searchText.isBlank()) Text("Pesquisar versão (ex.: 1.20.1 ou 24w14potato)", color = TextSecondary, fontSize = 11.sp)
+                        inner()
+                    }
+                }
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                listOf("Recentes", "Snapshots", "Beta", "Alpha", "Primeiro de abril", "Todas").forEach { tab ->
+                    FilterChip(selected = selectedTab == tab, onClick = { selectedTab = tab }, label = { Text(tab, fontSize = 10.sp) })
+                }
+            }
+
+            when {
+                loading -> Text("Carregando catálogo oficial da Mojang…", color = TextSecondary, fontSize = 11.sp)
+                loadError != null -> {
+                    Text("Falha ao carregar: $loadError", color = AccentYellow, fontSize = 11.sp)
+                    OutlinedButton(onClick = {
+                        catalog = emptyList()
+                        loadError = null
+                    }) { Text("Tentar novamente") }
+                }
+                catalog.isEmpty() -> Text("O catálogo ainda não foi carregado.", color = TextSecondary, fontSize = 11.sp)
+                else -> {
+                    Text("${filteredVersions.size} versões encontradas", color = TextSecondary, fontSize = 10.sp)
+                    Column(
+                        modifier = Modifier.fillMaxWidth().height(390.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        filteredVersions.forEach { item ->
+                            SelectableRow(
+                                title = item.id,
+                                subtitle = when {
+                                    isAprilFoolsVersion(item.id) -> "Edição especial de primeiro de abril • ${item.type}"
+                                    item.type == "release" -> "Versão estável • Release"
+                                    item.type == "snapshot" -> "Versão de teste • Snapshot"
+                                    item.type == "old_beta" -> "Versão histórica • Beta"
+                                    item.type == "old_alpha" -> "Versão histórica • Alpha"
+                                    else -> item.type
+                                },
+                                selected = selectedVersion == item.id,
+                                onClick = { selectedVersion = item.id }
+                            )
+                        }
+                        if (filteredVersions.isEmpty()) {
+                            Text("Nenhuma versão corresponde à pesquisa nesta categoria.", color = TextSecondary, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        } else {
+            InfoCard(
+                title = "Horizon Rust",
+                body = "O catálogo de versões do Minecraft Java não se aplica ao motor Horizon. As versões do Horizon serão fornecidas pelo próprio projeto.",
+                accent = AccentPurple
             )
         }
+
+        SectionLabel("SELEÇÃO PARA INSTALAÇÃO")
+        SelectableRow(
+            title = if (engine == "Java") selectedVersion else "Horizon Rust",
+            subtitle = "Versão escolhida para criar um novo perfil",
+            selected = true,
+            onClick = { }
+        )
         AnimatedLauncherButton(
-            text = "＋  Adicionar perfil selecionado",
+            text = "＋  Criar instalação",
             onClick = {
-                val profile = if (engine == "Java") version else "Horizon Rust"
+                val profile = if (engine == "Java") selectedVersion else "Horizon Rust"
                 saveProfiles(profiles + profile, profile)
                 showInfo = true
             },
             modifier = Modifier.fillMaxWidth()
         )
-        SectionLabel("PERFIS ADICIONADOS")
+
+        SectionLabel("INSTALAÇÕES ADICIONADAS")
         if (profiles.isEmpty()) {
-            Text("Nenhum perfil adicionado. Escolha uma versão acima e toque em Adicionar perfil.", color = TextSecondary, fontSize = 11.sp)
+            Text("Nenhuma instalação cadastrada ainda.", color = TextSecondary, fontSize = 11.sp)
         } else {
             profiles.forEach { profile ->
                 SelectableRow(
                     title = profile,
-                    subtitle = if (profile == "Horizon Rust") "Motor independente • perfil cadastrado" else "Minecraft Java • perfil cadastrado; arquivos do jogo ainda não foram instalados",
+                    subtitle = if (selectedProfile == profile) "Selecionada para a tela inicial" else "Perfil cadastrado",
                     selected = selectedProfile == profile,
-                    onClick = {
-                        saveProfiles(profiles, profile)
-                        showInfo = true
-                    }
+                    onClick = { saveProfiles(profiles, profile) }
                 )
             }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { showInfo = true }) { Text("Editar") }
-            OutlinedButton(onClick = {
-                if (selectedProfile.isNotBlank()) {
-                    saveProfiles(profiles.filterNot { it == selectedProfile }, profiles.firstOrNull { it != selectedProfile }.orEmpty())
-                } else showInfo = true
-            }, enabled = selectedProfile.isNotBlank()) { Text("Remover selecionado") }
-        }
-        SectionLabel("OPÇÕES DA INSTALAÇÃO")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Loader", "Runtime Java", "Memória RAM", "Argumentos JVM").forEach { option ->
-                FilterChip(selected = false, onClick = { showInfo = true }, label = { Text(option, fontSize = 10.sp) })
-            }
+            OutlinedButton(
+                onClick = {
+                    if (selectedProfile.isNotBlank()) {
+                        saveProfiles(profiles.filterNot { it == selectedProfile }, profiles.firstOrNull { it != selectedProfile }.orEmpty())
+                    }
+                },
+                enabled = selectedProfile.isNotBlank()
+            ) { Text("Remover instalação selecionada") }
         }
     }
     if (showInfo) InfoDialog(
-        "Perfis de versão",
-        "O perfil selecionado foi salvo e ficará disponível na tela inicial. O download dos arquivos do Minecraft e a instalação real ainda serão integrados."
+        "Perfil criado",
+        "O perfil foi salvo e já pode ser escolhido na tela inicial. Os arquivos do jogo, bibliotecas e assets ainda precisam ser baixados pelo instalador real."
     ) { showInfo = false }
 }
+
 @Composable
 private fun ModsScreen() {
     var selectedFilter by rememberSaveable { mutableStateOf("Todos") }
