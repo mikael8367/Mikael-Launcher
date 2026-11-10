@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.mikael.launcher.ui.navigation.LauncherSection
 import com.mikael.launcher.ui.theme.OutlineSoft
 import com.mikael.launcher.ui.theme.PrimaryGreen
-import com.mikael.launcher.ui.theme.Surface
+import com.mikael.launcher.ui.theme.Surface as PanelSurface
 import com.mikael.launcher.ui.theme.SurfaceRaised
 import com.mikael.launcher.ui.theme.TextSecondary
 
@@ -57,7 +57,7 @@ fun LauncherSidebar(
             .fillMaxHeight()
             .width(if (expanded) 218.dp else 76.dp)
             .animateContentSize(),
-        color = Surface,
+        color = PanelSurface,
         shape = RoundedCornerShape(22.dp)
     ) {
         Column(
