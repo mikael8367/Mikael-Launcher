@@ -1,6 +1,8 @@
 package com.mikael.launcher.ui.screens
 
 import android.net.Uri
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -58,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mikael.launcher.ui.navigation.LauncherSection
+import com.mikael.launcher.ui.components.AnimatedLauncherButton
 import com.mikael.launcher.ui.theme.AccentBlue
 import com.mikael.launcher.ui.theme.AccentPurple
 import com.mikael.launcher.ui.theme.AccentYellow
@@ -162,10 +165,28 @@ private fun PlayScreen() {
 
 @Composable
 private fun VersionsScreen() {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("mikael_launcher_preferences", Context.MODE_PRIVATE) }
     var engine by rememberSaveable { mutableStateOf("Java") }
     var version by rememberSaveable { mutableStateOf("1.12.2") }
     var showInfo by rememberSaveable { mutableStateOf(false) }
-    ScreenColumn("GERENCIAMENTO", "Versões", "Escolha o tipo de instalação que deseja organizar.") {
+    var profiles by remember {
+        mutableStateOf(prefs.getString("launcher_version_profiles", "").orEmpty().split("\n").filter { it.isNotBlank() })
+    }
+    var selectedProfile by remember {
+        mutableStateOf(prefs.getString("launcher_selected_version_profile", "").orEmpty())
+    }
+
+    fun saveProfiles(updated: List<String>, selected: String) {
+        profiles = updated.distinct()
+        selectedProfile = selected
+        prefs.edit()
+            .putString("launcher_version_profiles", profiles.joinToString("\n"))
+            .putString("launcher_selected_version_profile", selectedProfile)
+            .apply()
+    }
+
+    ScreenColumn("GERENCIAMENTO", "Versões", "Crie perfis de instalação e escolha qual aparecerá na tela inicial.") {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Java", "Horizon").forEach {
                 FilterChip(selected = engine == it, onClick = {
@@ -179,24 +200,43 @@ private fun VersionsScreen() {
         options.forEach { option ->
             SelectableRow(
                 title = option,
-                subtitle = if (engine == "Java") "Minecraft Java • instalação ainda não baixada" else "Motor Rust independente",
+                subtitle = if (engine == "Java") "Minecraft Java • perfil ainda não instalado" else "Horizon Rust • motor independente",
                 selected = version == option,
                 onClick = { version = option }
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { showInfo = true }) {
-                Icon(Icons.Rounded.Layers, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Nova instalação")
+        AnimatedLauncherButton(
+            text = "＋  Adicionar perfil selecionado",
+            onClick = {
+                val profile = if (engine == "Java") version else "Horizon Rust"
+                saveProfiles(profiles + profile, profile)
+                showInfo = true
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+        SectionLabel("PERFIS ADICIONADOS")
+        if (profiles.isEmpty()) {
+            Text("Nenhum perfil adicionado. Escolha uma versão acima e toque em Adicionar perfil.", color = TextSecondary, fontSize = 11.sp)
+        } else {
+            profiles.forEach { profile ->
+                SelectableRow(
+                    title = profile,
+                    subtitle = if (profile == "Horizon Rust") "Motor independente • perfil cadastrado" else "Minecraft Java • perfil cadastrado; arquivos do jogo ainda não foram instalados",
+                    selected = selectedProfile == profile,
+                    onClick = {
+                        saveProfiles(profiles, profile)
+                        showInfo = true
+                    }
+                )
             }
-            OutlinedButton(onClick = { showInfo = true }) { Text("Editar") }
-            OutlinedButton(onClick = { showInfo = true }) { Text("Duplicar") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { showInfo = true }) { Text("Excluir") }
-            OutlinedButton(onClick = { showInfo = true }) { Text("Abrir pasta") }
-            OutlinedButton(onClick = { showInfo = true }) { Text("Configurar") }
+            OutlinedButton(onClick = { showInfo = true }) { Text("Editar") }
+            OutlinedButton(onClick = {
+                if (selectedProfile.isNotBlank()) {
+                    saveProfiles(profiles.filterNot { it == selectedProfile }, profiles.firstOrNull { it != selectedProfile }.orEmpty())
+                } else showInfo = true
+            }, enabled = selectedProfile.isNotBlank()) { Text("Remover selecionado") }
         }
         SectionLabel("OPÇÕES DA INSTALAÇÃO")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -206,11 +246,10 @@ private fun VersionsScreen() {
         }
     }
     if (showInfo) InfoDialog(
-        "Instalador em desenvolvimento",
-        "A versão $version foi selecionada. O download e a instalação serão conectados na próxima etapa."
+        "Perfis de versão",
+        "O perfil selecionado foi salvo e ficará disponível na tela inicial. O download dos arquivos do Minecraft e a instalação real ainda serão integrados."
     ) { showInfo = false }
 }
-
 @Composable
 private fun ModsScreen() {
     var selectedFilter by rememberSaveable { mutableStateOf("Todos") }
