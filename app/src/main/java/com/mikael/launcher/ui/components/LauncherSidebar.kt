@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -101,26 +103,32 @@ fun LauncherSidebar(
                 modifier = Modifier.padding(start = if (expanded) 10.dp else 0.dp, bottom = 10.dp)
             )
 
-            val items = listOf(
-                LauncherSection.HOME to Icons.Rounded.Home,
-                LauncherSection.PLAY to Icons.Rounded.PlayArrow,
-                LauncherSection.VERSIONS to Icons.Rounded.Layers,
-                LauncherSection.MODS to Icons.Rounded.Extension,
-                LauncherSection.DOWNLOADS to Icons.Rounded.Download,
-                LauncherSection.SETTINGS to Icons.Rounded.Settings
-            )
-            items.forEach { (section, icon) ->
-                SidebarItem(
-                    section = section,
-                    icon = icon,
-                    selected = selected == section,
-                    expanded = expanded,
-                    onClick = { onSectionSelected(section) }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                val items = listOf(
+                    LauncherSection.HOME to Icons.Rounded.Home,
+                    LauncherSection.PLAY to Icons.Rounded.PlayArrow,
+                    LauncherSection.VERSIONS to Icons.Rounded.Layers,
+                    LauncherSection.MODS to Icons.Rounded.Extension,
+                    LauncherSection.DOWNLOADS to Icons.Rounded.Download,
+                    LauncherSection.SETTINGS to Icons.Rounded.Settings
                 )
-                Spacer(Modifier.height(5.dp))
+                items.forEach { (section, icon) ->
+                    SidebarItem(
+                        section = section,
+                        icon = icon,
+                        selected = selected == section,
+                        expanded = expanded,
+                        onClick = { onSectionSelected(section) }
+                    )
+                    Spacer(Modifier.height(5.dp))
+                }
             }
 
-            Spacer(Modifier.weight(1f))
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
