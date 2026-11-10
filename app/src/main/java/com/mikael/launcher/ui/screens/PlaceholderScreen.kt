@@ -304,6 +304,7 @@ private fun DownloadsScreen() {
 
 @Composable
 private fun SettingsScreen() {
+    val settingsContext = androidx.compose.ui.platform.LocalContext.current
     var showReset by rememberSaveable { mutableStateOf(false) }
     ScreenColumn("CENTRAL DE CONTROLE", "Configurações", "Personalize o launcher, o Minecraft Java, os gráficos, os downloads e o comportamento do aplicativo.") {
         SectionLabel("APARÊNCIA E INTERFACE")
@@ -368,7 +369,15 @@ private fun SettingsScreen() {
             text = { Text("As preferências visuais e de funcionamento voltarão aos valores iniciais. A chave CurseForge e a runtime escolhida não serão apagadas.") },
             confirmButton = {
                 TextButton(onClick = {
-                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val prefs = settingsContext.getSharedPreferences(LAUNCHER_PREFS, android.content.Context.MODE_PRIVATE)
+                    listOf(
+                        "ui_animations", "ui_compact", "ui_sidebar_labels", "ui_confirm_actions", "ui_start_home",
+                        "mc_auto_update", "mc_keep_installers", "mc_isolate_profiles", "mc_check_mods", "mc_backup_worlds",
+                        "perf_auto_ram", "perf_fps", "perf_vsync", "perf_background",
+                        "net_wifi_only", "net_resume", "net_verify", "net_notifications",
+                        "storage_cleanup", "privacy_crash_logs", "privacy_telemetry",
+                        "access_large_text", "logs_verbose", "logs_crash_prompt"
+                    ).forEach { prefs.edit().remove(it).apply() }
                     showReset = false
                 }) { Text("Entendi") }
             },
