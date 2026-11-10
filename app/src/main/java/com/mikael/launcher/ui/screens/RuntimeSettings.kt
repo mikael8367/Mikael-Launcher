@@ -160,7 +160,7 @@ private fun SelectableRuntimeRow(label: String, selected: Boolean, onClick: () -
 fun PersistentPreferenceToggle(key: String, title: String, description: String, defaultValue: Boolean = false) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE) }
-    var checked by remember(key) { mutableStateOf(prefs.getBoolean(key, defaultValue)) }
+    var checked by remember(key, prefs.getBoolean(key, defaultValue)) { mutableStateOf(prefs.getBoolean(key, defaultValue)) }
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically
