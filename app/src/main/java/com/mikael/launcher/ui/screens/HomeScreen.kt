@@ -21,12 +21,18 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.SportsEsports
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mikael.launcher.ui.components.LauncherCard
+import com.mikael.launcher.ui.components.AnimatedLauncherButton
 import com.mikael.launcher.ui.navigation.LauncherSection
 import com.mikael.launcher.ui.theme.AccentBlue
 import com.mikael.launcher.ui.theme.AccentPurple
@@ -48,7 +55,20 @@ import com.mikael.launcher.ui.theme.TextPrimary
 import com.mikael.launcher.ui.theme.TextSecondary
 
 @Composable
+private const val VERSION_PREFS = "mikael_launcher_preferences"
+private const val INSTALLED_VERSION_PROFILES = "launcher_version_profiles"
+private const val SELECTED_VERSION_PROFILE = "launcher_selected_version_profile"
+
+@Composable
 fun HomeScreen(onNavigate: (LauncherSection) -> Unit) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences(VERSION_PREFS, Context.MODE_PRIVATE) }
+    var versionProfiles by remember {
+        mutableStateOf(prefs.getString(INSTALLED_VERSION_PROFILES, "").orEmpty().split("\n").filter { it.isNotBlank() })
+    }
+    var selectedVersion by remember { mutableStateOf(prefs.getString(SELECTED_VERSION_PROFILE, "").orEmpty()) }
+    var showVersionPicker by remember { mutableStateOf(false) }
+    var showStartNotice by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -73,7 +93,13 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit) {
         }
 
         Spacer(Modifier.height(16.dp))
-        HeroPanel(onExplore = { onNavigate(LauncherSection.VERSIONS) })
+        HeroPanel(
+            selectedVersion = selectedVersion,
+            hasProfiles = versionProfiles.isNotEmpty(),
+            onChooseVersion = { showVersionPicker = true },
+            onStart = { showStartNotice = true },
+            onExplore = { onNavigate(LauncherSection.VERSIONS) }
+        )
 
         Spacer(Modifier.height(14.dp))
         Text("SEU AMBIENTE", color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.7.sp)
@@ -133,10 +159,49 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit) {
         }
         Spacer(Modifier.height(12.dp))
     }
+    if (showVersionPicker) {
+        AlertDialog(
+            onDismissRequest = { showVersionPicker = false },
+            title = { Text("Selecionar versão") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    if (versionProfiles.isEmpty()) {
+                        Text("Nenhuma versão foi adicionada ainda. Acesse Versões para criar um perfil de instalação.", color = TextSecondary)
+                    } else {
+                        versionProfiles.forEach { profile ->
+                            TextButton(onClick = {
+                                selectedVersion = profile
+                                prefs.edit().putString(SELECTED_VERSION_PROFILE, profile).apply()
+                                showVersionPicker = false
+                            }) {
+                                Text(if (profile == selectedVersion) "✓  $profile" else profile)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showVersionPicker = false }) { Text("Fechar") } },
+            dismissButton = { TextButton(onClick = { showVersionPicker = false; onNavigate(LauncherSection.VERSIONS) }) { Text("Gerenciar versões") } }
+        )
+    }
+    if (showStartNotice) {
+        AlertDialog(
+            onDismissRequest = { showStartNotice = false },
+            title = { Text("Iniciar Minecraft") },
+            text = {
+                Text(
+                    if (selectedVersion.isBlank()) "Selecione ou adicione uma versão antes de iniciar."
+                    else "A versão selecionada é $selectedVersion. O processo real de inicialização será conectado quando o motor Minecraft estiver integrado."
+                )
+            },
+            confirmButton = { TextButton(onClick = { showStartNotice = false }) { Text("Entendi") } },
+            dismissButton = { TextButton(onClick = { showStartNotice = false; onNavigate(LauncherSection.VERSIONS) }) { Text("Versões") } }
+        )
+    }
 }
 
 @Composable
-private fun HeroPanel(onExplore: () -> Unit) {
+private fun HeroPanel(selectedVersion: String, hasProfiles: Boolean, onChooseVersion: () -> Unit, onStart: () -> Unit, onExplore: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -169,12 +234,23 @@ private fun HeroPanel(onExplore: () -> Unit) {
                 fontSize = 12.sp
             )
             Spacer(Modifier.height(13.dp))
-            Button(
-                onClick = onExplore,
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen, contentColor = Color(0xFF062116)),
-                shape = RoundedCornerShape(11.dp)
+            Text("VERSÃO SELECIONADA", color = TextSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Surface(
+                onClick = onChooseVersion,
+                color = Color(0xFF10271E),
+                shape = RoundedCornerShape(10.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryGreen.copy(alpha = 0.55f))
             ) {
-                Text("Explorar versões", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (selectedVersion.isBlank()) "Selecionar versão" else selectedVersion, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(8.dp))
+                    Text("⌄", color = PrimaryGreen, fontSize = 15.sp)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AnimatedLauncherButton(text = "▶  Iniciar", onClick = onStart, enabled = hasProfiles)
+                androidx.compose.material3.OutlinedButton(onClick = onExplore) { Text("Versões") }
             }
         }
         Box(
