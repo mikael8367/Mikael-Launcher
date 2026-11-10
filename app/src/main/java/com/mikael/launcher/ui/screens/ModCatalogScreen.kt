@@ -83,13 +83,15 @@ fun ModCatalogScreen() {
     var mods by remember { mutableStateOf<List<CatalogMod>>(emptyList()) }
     var page by remember { mutableStateOf(0) }
     var loading by remember { mutableStateOf(false) }
+    var reloadRequested by remember { mutableStateOf(false) }
     var hasMore by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf("Carregando mods…") }
     var searchToken by remember { mutableStateOf(0) }
     val apiKey = remember { context.getSharedPreferences(MOD_PREFS, Context.MODE_PRIVATE).getString(CURSE_KEY, "").orEmpty() }
 
     fun load(reset: Boolean) {
-        if (loading || (!reset && !hasMore)) return
+        if (loading) { if (reset) reloadRequested = true; return }
+        if (!reset && !hasMore) return
         loading = true
         val requestedPage = if (reset) 0 else page
         val currentVersion = gameVersion
@@ -118,6 +120,10 @@ fun ModCatalogScreen() {
                 hasMore = false
             } finally {
                 loading = false
+                if (reloadRequested) {
+                    reloadRequested = false
+                    load(true)
+                }
             }
         }
     }
