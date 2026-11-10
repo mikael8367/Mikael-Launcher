@@ -184,10 +184,25 @@ private fun VersionsScreen() {
                 onClick = { version = option }
             )
         }
-        Button(onClick = { showInfo = true }) {
-            Icon(Icons.Rounded.Layers, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Adicionar instalação")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { showInfo = true }) {
+                Icon(Icons.Rounded.Layers, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Nova instalação")
+            }
+            OutlinedButton(onClick = { showInfo = true }) { Text("Editar") }
+            OutlinedButton(onClick = { showInfo = true }) { Text("Duplicar") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { showInfo = true }) { Text("Excluir") }
+            OutlinedButton(onClick = { showInfo = true }) { Text("Abrir pasta") }
+            OutlinedButton(onClick = { showInfo = true }) { Text("Configurar") }
+        }
+        SectionLabel("OPÇÕES DA INSTALAÇÃO")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Loader", "Runtime Java", "Memória RAM", "Argumentos JVM").forEach { option ->
+                FilterChip(selected = false, onClick = { showInfo = true }, label = { Text(option, fontSize = 10.sp) })
+            }
         }
     }
     if (showInfo) InfoDialog(
