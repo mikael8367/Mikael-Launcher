@@ -205,7 +205,6 @@ private fun isAprilFoolsVersion(id: String): Boolean {
         normalized.contains("23w13") ||
         normalized.contains("24w14") ||
         normalized.contains("25w14") ||
-        normalized.contains("26w14") ||
         normalized.contains("infinite") ||
         normalized.contains("potato") ||
         normalized.contains("craftmine")
@@ -225,7 +224,7 @@ private fun VersionsScreen() {
     var loadError by remember { mutableStateOf<String?>(null) }
     var catalog by remember { mutableStateOf<List<MinecraftCatalogVersion>>(emptyList()) }
     var profiles by remember {
-        mutableStateOf(prefs.getString("launcher_version_profiles", "").orEmpty().split("\\n").filter { it.isNotBlank() })
+        mutableStateOf(prefs.getString("launcher_version_profiles", "").orEmpty().split("\n").filter { it.isNotBlank() })
     }
     var selectedProfile by remember {
         mutableStateOf(prefs.getString("launcher_selected_version_profile", "").orEmpty())
@@ -249,7 +248,7 @@ private fun VersionsScreen() {
         profiles = updated.distinct()
         selectedProfile = selected
         prefs.edit()
-            .putString("launcher_version_profiles", profiles.joinToString("\\n"))
+            .putString("launcher_version_profiles", profiles.joinToString("\n"))
             .putString("launcher_selected_version_profile", selectedProfile)
             .apply()
     }
@@ -321,8 +320,8 @@ private fun VersionsScreen() {
                                 title = item.id,
                                 subtitle = when {
                                     isAprilFoolsVersion(item.id) -> "Edição especial de primeiro de abril • ${item.type}"
-                                    item.type == "release" -> "Versão estável • Release"
-                                    item.type == "snapshot" -> "Versão de teste • Snapshot"
+                                    item.type == "release" -> "Versão estável • Release • ${item.releaseTime.take(10)}"
+                                    item.type == "snapshot" -> "Versão de teste • Snapshot • ${item.releaseTime.take(10)}"
                                     item.type == "old_beta" -> "Versão histórica • Beta"
                                     item.type == "old_alpha" -> "Versão histórica • Alpha"
                                     else -> item.type
