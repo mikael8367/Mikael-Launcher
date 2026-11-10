@@ -87,7 +87,6 @@ fun ModCatalogScreen() {
     var hasMore by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf("Carregando mods…") }
     var searchToken by remember { mutableStateOf(0) }
-    val apiKey = remember { context.getSharedPreferences(MOD_PREFS, Context.MODE_PRIVATE).getString(CURSE_KEY, "").orEmpty() }
 
     fun load(reset: Boolean) {
         if (loading) { if (reset) reloadRequested = true; return }
@@ -98,6 +97,7 @@ fun ModCatalogScreen() {
         val currentLoader = loader
         val currentSource = source
         val currentQuery = query.trim()
+        val currentApiKey = context.getSharedPreferences(MOD_PREFS, Context.MODE_PRIVATE).getString(CURSE_KEY, "").orEmpty()
         scope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
@@ -107,7 +107,7 @@ fun ModCatalogScreen() {
                         source = currentSource,
                         query = currentQuery,
                         offset = requestedPage * MOD_PAGE_SIZE,
-                        curseKey = apiKey
+                        curseKey = currentApiKey
                     )
                 }
                 mods = if (reset) result.mods else (mods + result.mods).distinctBy { it.source + ":" + it.id }
