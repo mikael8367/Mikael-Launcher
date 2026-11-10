@@ -21,6 +21,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.Inventory2
+import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Layers
@@ -113,8 +119,14 @@ fun LauncherSidebar(
                     LauncherSection.HOME to Icons.Rounded.Home,
                     LauncherSection.PLAY to Icons.Rounded.PlayArrow,
                     LauncherSection.VERSIONS to Icons.Rounded.Layers,
+                    LauncherSection.ACCOUNTS to Icons.Rounded.AccountCircle,
                     LauncherSection.MODS to Icons.Rounded.Extension,
+                    LauncherSection.RESOURCE_PACKS to Icons.Rounded.Inventory2,
+                    LauncherSection.SHADERS to Icons.Rounded.LightMode,
+                    LauncherSection.WORLDS to Icons.Rounded.Public,
                     LauncherSection.DOWNLOADS to Icons.Rounded.Download,
+                    LauncherSection.PERFORMANCE to Icons.Rounded.Speed,
+                    LauncherSection.LOGS to Icons.Rounded.Terminal,
                     LauncherSection.SETTINGS to Icons.Rounded.Settings
                 )
                 items.forEach { (section, icon) ->
