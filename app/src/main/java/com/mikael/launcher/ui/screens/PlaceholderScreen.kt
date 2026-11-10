@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import java.net.URL
+import java.net.HttpURLConnection
 import org.json.JSONObject
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -194,7 +195,7 @@ private suspend fun fetchMinecraftVersions(): List<MinecraftCatalogVersion> = wi
             }
         }
     } finally {
-        connection.getInputStream().close()
+        (connection as? HttpURLConnection)?.disconnect()
     }
 }
 
@@ -220,6 +221,7 @@ private fun VersionsScreen() {
     var searchText by rememberSaveable { mutableStateOf("") }
     var showInfo by rememberSaveable { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
+    var retryCount by remember { mutableIntStateOf(0) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var catalog by remember { mutableStateOf<List<MinecraftCatalogVersion>>(emptyList()) }
     var profiles by remember {
@@ -229,7 +231,7 @@ private fun VersionsScreen() {
         mutableStateOf(prefs.getString("launcher_selected_version_profile", "").orEmpty())
     }
 
-    LaunchedEffect(engine) {
+    LaunchedEffect(engine, retryCount) {
         if (engine == "Java" && catalog.isEmpty() && !loading) {
             loading = true
             loadError = null
@@ -305,10 +307,7 @@ private fun VersionsScreen() {
                 loading -> Text("Carregando catálogo oficial da Mojang…", color = TextSecondary, fontSize = 11.sp)
                 loadError != null -> {
                     Text("Falha ao carregar: $loadError", color = AccentYellow, fontSize = 11.sp)
-                    OutlinedButton(onClick = {
-                        catalog = emptyList()
-                        loadError = null
-                    }) { Text("Tentar novamente") }
+                    OutlinedButton(onClick = { retryCount++ }) { Text("Tentar novamente") }
                 }
                 catalog.isEmpty() -> Text("O catálogo ainda não foi carregado.", color = TextSecondary, fontSize = 11.sp)
                 else -> {
