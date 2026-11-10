@@ -204,7 +204,7 @@ private fun QuickInfoCard(
 ) {
     Surface(
         modifier = modifier,
-        color = Surface,
+        color = PanelSurface,
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, OutlineSoft.copy(alpha = 0.65f))
     ) {
