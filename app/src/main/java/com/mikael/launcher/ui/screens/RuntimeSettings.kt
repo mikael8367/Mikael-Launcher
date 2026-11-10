@@ -38,6 +38,8 @@ internal const val LAUNCHER_PREFS = "mikael_launcher_preferences"
 internal const val PREF_FIRST_RUN_DONE = "first_run_runtime_choice"
 internal const val PREF_RUNTIME = "selected_java_runtime"
 internal const val PREF_RENDERER = "selected_renderer"
+internal const val PREF_RAM = "selected_ram_limit"
+internal const val PREF_JVM_ARGS = "selected_jvm_arguments"
 
 val JAVA_RUNTIMES = listOf("Java 8", "Java 17", "Java 21", "Java 25")
 val RENDERER_BACKENDS = listOf("GL4ES", "Zink", "VirGL", "ANGLE", "Vulkan (experimental)", "Software")
@@ -48,8 +50,8 @@ fun RuntimeSettingsPanel() {
     val prefs = remember { context.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE) }
     var runtime by remember { mutableStateOf(prefs.getString(PREF_RUNTIME, "Java 8") ?: "Java 8") }
     var renderer by remember { mutableStateOf(prefs.getString(PREF_RENDERER, "GL4ES") ?: "GL4ES") }
-    var javaArgs by rememberSaveable { mutableStateOf("-Xms512M -Xmx2G") }
-    var ramLimit by rememberSaveable { mutableStateOf("2048 MB") }
+    var javaArgs by remember { mutableStateOf(prefs.getString(PREF_JVM_ARGS, "-Xms512M -Xmx2G") ?: "-Xms512M -Xmx2G") }
+    var ramLimit by remember { mutableStateOf(prefs.getString(PREF_RAM, "2048 MB") ?: "2048 MB") }
     var installNotice by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -78,12 +80,12 @@ fun RuntimeSettingsPanel() {
         Text("MEMÓRIA E PARÂMETROS", color = PrimaryGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("1024 MB", "1536 MB", "2048 MB", "3072 MB").forEach { option ->
-                FilterChip(selected = ramLimit == option, onClick = { ramLimit = option }, label = { Text(option, fontSize = 9.sp) })
+                FilterChip(selected = ramLimit == option, onClick = { ramLimit = option; prefs.edit().putString(PREF_RAM, option).apply() }, label = { Text(option, fontSize = 9.sp) })
             }
         }
         androidx.compose.material3.OutlinedTextField(
             value = javaArgs,
-            onValueChange = { javaArgs = it },
+            onValueChange = { javaArgs = it; prefs.edit().putString(PREF_JVM_ARGS, it).apply() },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Argumentos JVM") },
             minLines = 2
