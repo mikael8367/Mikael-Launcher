@@ -73,7 +73,7 @@ fun PlaceholderScreen(section: LauncherSection) {
     when (section) {
         LauncherSection.PLAY -> PlayScreen()
         LauncherSection.VERSIONS -> VersionsScreen()
-        LauncherSection.MODS -> ModsScreen()
+        LauncherSection.MODS -> ModCatalogScreen()
         LauncherSection.DOWNLOADS -> DownloadsScreen()
         LauncherSection.SETTINGS -> SettingsScreen()
         LauncherSection.ACCOUNTS,
@@ -312,6 +312,8 @@ private fun SettingsScreen() {
         SettingToggle("Animações da interface", "Controla a preferência visual nesta etapa.", animations) { animations = it }
         SettingToggle("Cards compactos", "Preferência de densidade visual.", compactCards) { compactCards = it }
         SettingToggle("Notificações", "Preferência local para avisos do launcher.", notifications) { notifications = it }
+        HorizontalDivider(color = OutlineSoft)
+        CurseForgeApiSettings()
         HorizontalDivider(color = OutlineSoft)
         InfoCard(
             title = "Sobre o projeto",
