@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mikael.launcher.ui.navigation.LauncherSection
 import com.mikael.launcher.ui.theme.PrimaryGreen
-import com.mikael.launcher.ui.theme.Surface
+import com.mikael.launcher.ui.theme.Surface as PanelSurface
 import com.mikael.launcher.ui.theme.TextPrimary
 import com.mikael.launcher.ui.theme.TextSecondary
 
@@ -34,7 +34,7 @@ fun PlaceholderScreen(section: LauncherSection) {
         modifier = Modifier.fillMaxSize().padding(12.dp),
         contentAlignment = Alignment.Center
     ) {
-        Surface(color = Surface, shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {
+        Surface(color = PanelSurface, shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {
             Column(
                 modifier = Modifier.padding(horizontal = 36.dp, vertical = 30.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
