@@ -241,6 +241,17 @@ private fun ModsScreen() {
             Spacer(Modifier.width(8.dp))
             Text("Selecionar arquivo .jar ou .zip")
         }
+        SectionLabel("AÇÕES DO MOD SELECIONADO")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { showInfo = true }) { Text("Ativar") }
+            OutlinedButton(onClick = { showInfo = true }) { Text("Desativar") }
+            OutlinedButton(onClick = { showInfo = true }) { Text("Configurar") }
+            OutlinedButton(onClick = { showInfo = true }) { Text("Remover") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { showInfo = true }) { Text("Ver dependências") }
+            OutlinedButton(onClick = { showInfo = true }) { Text("Abrir pasta") }
+        }
         if (selectedFile != null) {
             SelectableRow(
                 title = "Arquivo selecionado",
@@ -275,7 +286,15 @@ private fun DownloadsScreen() {
             title = "Nenhum download em andamento",
             description = "Quando os instaladores e arquivos forem integrados, o progresso aparecerá aqui."
         )
-        OutlinedButton(onClick = { showDetails = true }) { Text("Ver informações") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { showDetails = true }) { Text("Pausar tudo") }
+            OutlinedButton(onClick = { showDetails = true }) { Text("Retomar tudo") }
+            OutlinedButton(onClick = { showDetails = true }) { Text("Cancelar fila") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { showDetails = true }) { Text("Limpar concluídos") }
+            OutlinedButton(onClick = { showDetails = true }) { Text("Ver informações") }
+        }
     }
     if (showDetails) InfoDialog(
         "Gerenciador de downloads",
