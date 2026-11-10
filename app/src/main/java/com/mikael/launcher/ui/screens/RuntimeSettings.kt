@@ -107,7 +107,6 @@ fun FirstRunRuntimeDialog(onFinished: () -> Unit) {
     val prefs = remember { context.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE) }
     var runtime by remember { mutableStateOf(prefs.getString(PREF_RUNTIME, "Java 8") ?: "Java 8") }
     var renderer by remember { mutableStateOf(prefs.getString(PREF_RENDERER, "GL4ES") ?: "GL4ES") }
-    var showInfo by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = { },
@@ -135,18 +134,9 @@ fun FirstRunRuntimeDialog(onFinished: () -> Unit) {
                     .putBoolean(PREF_FIRST_RUN_DONE, true)
                     .apply()
                 onFinished()
-                showInfo = true
             }) { Text("Salvar e continuar") }
         }
     )
-    if (showInfo) {
-        AlertDialog(
-            onDismissRequest = { showInfo = false },
-            title = { Text("Preferências salvas") },
-            text = { Text("Runtime $runtime e renderizador $renderer selecionados. A instalação real dos pacotes será ativada quando o gerenciador de downloads estiver conectado.") },
-            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } }
-        )
-    }
 }
 
 @Composable
