@@ -42,7 +42,7 @@ import com.mikael.launcher.ui.theme.AccentPurple
 import com.mikael.launcher.ui.theme.AccentYellow
 import com.mikael.launcher.ui.theme.OutlineSoft
 import com.mikael.launcher.ui.theme.PrimaryGreen
-import com.mikael.launcher.ui.theme.Surface
+import com.mikael.launcher.ui.theme.Surface as PanelSurface
 import com.mikael.launcher.ui.theme.SurfaceRaised
 import com.mikael.launcher.ui.theme.TextPrimary
 import com.mikael.launcher.ui.theme.TextSecondary
@@ -63,7 +63,7 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit) {
                 Text("PAINEL PRINCIPAL", color = PrimaryGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                 Text("Bem-vindo ao seu launcher", color = TextPrimary, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
             }
-            Surface(color = Surface, shape = RoundedCornerShape(30.dp), border = androidx.compose.foundation.BorderStroke(1.dp, OutlineSoft)) {
+            Surface(color = PanelSurface, shape = RoundedCornerShape(30.dp), border = androidx.compose.foundation.BorderStroke(1.dp, OutlineSoft)) {
                 Row(modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(7.dp).clip(CircleShape).background(AccentYellow))
                     Spacer(Modifier.width(8.dp))
@@ -228,7 +228,7 @@ private fun QuickInfoCard(
 @Composable
 private fun SmallAction(label: String, onClick: () -> Unit) {
     Surface(
-        modifier = Modifier.clip(RoundedCornerShape(9.dp)).background(SurfaceRaised),
+        modifier = Modifier.clip(RoundedCornerShape(9.dp)),
         color = SurfaceRaised,
         shape = RoundedCornerShape(9.dp),
         onClick = onClick
