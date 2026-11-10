@@ -1,0 +1,166 @@
+package com.mikael.launcher.ui.screens
+
+import android.content.Context
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.mikael.launcher.ui.theme.OutlineSoft
+import com.mikael.launcher.ui.theme.PrimaryGreen
+import com.mikael.launcher.ui.theme.Surface as PanelSurface
+import com.mikael.launcher.ui.theme.TextPrimary
+import com.mikael.launcher.ui.theme.TextSecondary
+
+internal const val LAUNCHER_PREFS = "mikael_launcher_preferences"
+internal const val PREF_FIRST_RUN_DONE = "first_run_runtime_choice"
+internal const val PREF_RUNTIME = "selected_java_runtime"
+internal const val PREF_RENDERER = "selected_renderer"
+
+val JAVA_RUNTIMES = listOf("Java 8", "Java 17", "Java 21", "Java 25")
+val RENDERER_BACKENDS = listOf("GL4ES", "Zink", "VirGL", "ANGLE", "Vulkan (experimental)", "Software")
+
+@Composable
+fun RuntimeSettingsPanel() {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE) }
+    var runtime by remember { mutableStateOf(prefs.getString(PREF_RUNTIME, "Java 8") ?: "Java 8") }
+    var renderer by remember { mutableStateOf(prefs.getString(PREF_RENDERER, "GL4ES") ?: "GL4ES") }
+    var javaArgs by rememberSaveable { mutableStateOf("-Xms512M -Xmx2G") }
+    var ramLimit by rememberSaveable { mutableStateOf("2048 MB") }
+    var installNotice by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Text("RUNTIME JAVA", color = PrimaryGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text("Runtime selecionada: $runtime", color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            JAVA_RUNTIMES.forEach { option ->
+                FilterChip(selected = runtime == option, onClick = {
+                    runtime = option
+                    prefs.edit().putString(PREF_RUNTIME, option).apply()
+                }, label = { Text(option, fontSize = 10.sp) })
+            }
+        }
+        Text("RENDERIZADOR GRÁFICO", color = PrimaryGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text("Renderizador: $renderer", color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+        RENDERER_BACKENDS.chunked(3).forEach { group ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                group.forEach { option ->
+                    FilterChip(selected = renderer == option, onClick = {
+                        renderer = option
+                        prefs.edit().putString(PREF_RENDERER, option).apply()
+                    }, label = { Text(option, fontSize = 9.sp) })
+                }
+            }
+        }
+        Text("MEMÓRIA E PARÂMETROS", color = PrimaryGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("1024 MB", "1536 MB", "2048 MB", "3072 MB").forEach { option ->
+                FilterChip(selected = ramLimit == option, onClick = { ramLimit = option }, label = { Text(option, fontSize = 9.sp) })
+            }
+        }
+        androidx.compose.material3.OutlinedTextField(
+            value = javaArgs,
+            onValueChange = { javaArgs = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Argumentos JVM") },
+            minLines = 2
+        )
+        Button(onClick = { installNotice = true }) { Text("Instalar / gerenciar runtime selecionada") }
+        Text("A seleção fica salva neste aparelho. Os pacotes de runtime e os renderizadores ainda precisam ser integrados e validados para cada GPU/Android.", color = TextSecondary, fontSize = 10.sp)
+    }
+    if (installNotice) {
+        AlertDialog(
+            onDismissRequest = { installNotice = false },
+            title = { Text("Gerenciador de runtime") },
+            text = { Text("$runtime foi selecionada. O download, a verificação de integridade e a instalação do pacote serão conectados na etapa de integração.") },
+            confirmButton = { TextButton(onClick = { installNotice = false }) { Text("Entendi") } }
+        )
+    }
+}
+
+@Composable
+fun FirstRunRuntimeDialog(onFinished: () -> Unit) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE) }
+    var runtime by remember { mutableStateOf(prefs.getString(PREF_RUNTIME, "Java 8") ?: "Java 8") }
+    var renderer by remember { mutableStateOf(prefs.getString(PREF_RENDERER, "GL4ES") ?: "GL4ES") }
+    var showInfo by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = { },
+        title = { Text("Configuração inicial") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("Escolha o runtime Java que deseja preparar para instalar.", color = TextSecondary, fontSize = 12.sp)
+                JAVA_RUNTIMES.forEach { option ->
+                    SelectableRuntimeRow(option, runtime == option) { runtime = option }
+                }
+                Text("Renderizador gráfico inicial", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf("GL4ES", "Zink", "VirGL").forEach { option ->
+                        FilterChip(selected = renderer == option, onClick = { renderer = option }, label = { Text(option, fontSize = 10.sp) })
+                    }
+                }
+                Text("A compatibilidade depende do Android, processador gráfico e versão do Minecraft.", color = TextSecondary, fontSize = 10.sp)
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                prefs.edit()
+                    .putString(PREF_RUNTIME, runtime)
+                    .putString(PREF_RENDERER, renderer)
+                    .putBoolean(PREF_FIRST_RUN_DONE, true)
+                    .apply()
+                onFinished()
+                showInfo = true
+            }) { Text("Salvar e continuar") }
+        }
+    )
+    if (showInfo) {
+        AlertDialog(
+            onDismissRequest = { showInfo = false },
+            title = { Text("Preferências salvas") },
+            text = { Text("Runtime $runtime e renderizador $renderer selecionados. A instalação real dos pacotes será ativada quando o gerenciador de downloads estiver conectado.") },
+            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } }
+        )
+    }
+}
+
+@Composable
+private fun SelectableRuntimeRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        color = if (selected) PrimaryGreen.copy(alpha = 0.10f) else PanelSurface,
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, if (selected) PrimaryGreen else OutlineSoft)
+    ) {
+        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, modifier = Modifier.weight(1f), color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            if (selected) Text("Selecionado", color = PrimaryGreen, fontSize = 10.sp)
+        }
+    }
+}
