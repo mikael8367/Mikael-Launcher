@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,7 +46,7 @@ fun AccountHeader(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Row(
-        modifier = Modifier.padding(bottom = 10.dp).fillMaxWidthCompat(),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -130,6 +131,3 @@ fun MinecraftHead(name: String, modifier: Modifier = Modifier) {
     }
 }
 
-private fun Modifier.fillMaxWidthCompat(): Modifier = this.then(
-    Modifier.background(Color.Transparent)
-)
