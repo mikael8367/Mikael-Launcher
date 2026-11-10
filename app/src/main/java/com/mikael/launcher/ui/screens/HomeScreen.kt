@@ -54,7 +54,6 @@ import com.mikael.launcher.ui.theme.SurfaceRaised
 import com.mikael.launcher.ui.theme.TextPrimary
 import com.mikael.launcher.ui.theme.TextSecondary
 
-@Composable
 private const val VERSION_PREFS = "mikael_launcher_preferences"
 private const val INSTALLED_VERSION_PROFILES = "launcher_version_profiles"
 private const val SELECTED_VERSION_PROFILE = "launcher_selected_version_profile"
