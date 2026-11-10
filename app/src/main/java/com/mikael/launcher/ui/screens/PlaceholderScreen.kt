@@ -76,6 +76,12 @@ fun PlaceholderScreen(section: LauncherSection) {
         LauncherSection.MODS -> ModsScreen()
         LauncherSection.DOWNLOADS -> DownloadsScreen()
         LauncherSection.SETTINGS -> SettingsScreen()
+        LauncherSection.ACCOUNTS,
+        LauncherSection.RESOURCE_PACKS,
+        LauncherSection.SHADERS,
+        LauncherSection.WORLDS,
+        LauncherSection.PERFORMANCE,
+        LauncherSection.LOGS -> AdditionalLauncherScreen(section)
         LauncherSection.HOME -> EmptySection(
             section = section,
             icon = Icons.Rounded.Gamepad,
