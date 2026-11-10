@@ -46,3 +46,15 @@ O APK de depuração será produzido em `app/build/outputs/apk/debug/`. Nenhum A
 3. Implementar gerenciamento de versões do motor Java.
 4. Integrar o motor Horizon de forma independente, após verificar compatibilidade do dispositivo.
 5. Implementar autenticação, downloads reais e gerenciamento de mods.
+
+
+## Etapa 2 — interface de contas e perfil
+
+- Menu de perfil no canto superior direito, com nome e avatar em estilo pixel-art provisório.
+- Dropdown para alternar entre perfis locais já adicionados e abrir a área de contas.
+- Área de contas com opções visuais Microsoft, Offline e Ely.by.
+- Cadastro local Offline com validação de nome (1–16 caracteres, letras, números e sublinhado).
+- Seleção e remoção de perfis locais; o perfil escolhido é refletido no menu superior.
+- Minecraft Java e Horizon Rust continuam apresentados como motores separados.
+
+**Limites desta etapa:** o avatar ainda é ilustrativo e não baixa a skin real; Microsoft e Ely.by ainda não autenticam; perfis locais são estado de interface, não tokens de sessão oficiais. A integração segura de OAuth, consulta de skin e persistência definitiva será feita na etapa de lógica.
