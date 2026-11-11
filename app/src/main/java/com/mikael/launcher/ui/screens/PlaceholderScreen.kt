@@ -226,6 +226,7 @@ private fun VersionsScreen() {
     val prefs = remember { context.getSharedPreferences("mikael_launcher_preferences", Context.MODE_PRIVATE) }
     var engine by rememberSaveable { mutableStateOf("Java") }
     var selectedVersion by rememberSaveable { mutableStateOf("1.12.2") }
+    var lastJavaVersion by rememberSaveable { mutableStateOf("1.12.2") }
     var selectedTab by rememberSaveable { mutableStateOf("Recentes") }
     var searchText by rememberSaveable { mutableStateOf("") }
     var showInfo by rememberSaveable { mutableStateOf(false) }
@@ -315,7 +316,7 @@ private fun VersionsScreen() {
             listOf("Java", "Horizon").forEach {
                 FilterChip(selected = engine == it, onClick = {
                     engine = it
-                    if (it == "Horizon") selectedVersion = "Horizon Rust"
+                    selectedVersion = if (it == "Horizon") "Horizon Rust" else lastJavaVersion
                 }, label = { Text(it) })
             }
         }
@@ -370,7 +371,10 @@ private fun VersionsScreen() {
                                     else -> item.type
                                 },
                                 selected = selectedVersion == item.id,
-                                onClick = { selectedVersion = item.id }
+                                onClick = {
+                                    selectedVersion = item.id
+                                    lastJavaVersion = item.id
+                                }
                             )
                         }
                         if (filteredVersions.isEmpty()) {
