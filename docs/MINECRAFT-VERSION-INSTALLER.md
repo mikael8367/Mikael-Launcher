@@ -36,7 +36,7 @@ Downloads usam HTTPS; redirecionamento para HTTP é rejeitado. Os caminhos de de
 
 ## Limites que ainda impedem o botão Jogar de funcionar
 
-- Os classificadores `natives-linux` oficiais são armazenados, mas não são extraídos nem considerados compatíveis com Android ARM64 automaticamente.
+- Os classificadores `natives-linux`, `natives-windows` e `natives-osx` são ignorados no download Android; o runtime FCL precisa fornecer os natives Android ARM64.
 - A camada de runtime Java ARM64 do FCL ainda não foi conectada.
 - A adaptação FCL para construir classpath, extrair natives corretos, preparar argumentos JVM, abrir a superfície SDL/renderer e iniciar o processo ainda não foi integrada.
 - Forge, Fabric e OptiFine exigem instaladores/patchers próprios e validação de dependências; selecionar um nome no perfil não equivale a instalar esses loaders.
