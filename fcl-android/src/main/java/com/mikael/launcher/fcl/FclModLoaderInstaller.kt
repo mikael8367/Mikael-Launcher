@@ -67,7 +67,7 @@ object FclModLoaderInstaller {
         require(loaderVersion.isNotBlank() && loaderVersion.length <= 100) {
             "Versão do mod loader inválida."
         }
-        ensureFclReady()
+        ensureFclReady(context)
         val profile = Profiles.getSelectedProfile()
         val selectedDirectory = FclGameDirectoryResolver.resolve(context.applicationContext).canonicalFile
         if (profile.gameDir.canonicalFile != selectedDirectory) {
