@@ -52,7 +52,11 @@ class MinecraftInstaller(
         require(maxParallelDownloads in 1..8) { "Paralelismo fora do limite permitido." }
 
         val root = gameDirectory.canonicalFile
-        if (!root.exists() && !root.mkdirs()) error("Não foi possível criar a pasta do Minecraft.")
+        if (root.exists()) {
+            require(root.isDirectory) { "O caminho de dados do Minecraft não é uma pasta." }
+        } else if (!root.mkdirs()) {
+            error("Não foi possível criar a pasta do Minecraft.")
+        }
         val metadataBytes = readUrl(metadataUrl)
         if (!metadataSha1.isNullOrBlank() && sha1(metadataBytes) != metadataSha1.lowercase()) {
             error("O SHA-1 do manifesto da versão não confere.")
@@ -158,7 +162,9 @@ class MinecraftInstaller(
             tasks += taskFromJson(logging, safeResolve(root, "versions/$versionId/$path"), "logging config")
         }
 
-        versionRoot.mkdirs()
+        if (!versionRoot.exists() && !versionRoot.mkdirs()) {
+            error("Não foi possível criar a pasta da versão.")
+        }
         writeAtomically(versionJson, metadataText.toByteArray(Charsets.UTF_8))
 
         val uniqueTasks = tasks.groupBy { it.target.canonicalPath }.values.map { duplicates ->
@@ -309,7 +315,12 @@ class MinecraftInstaller(
             connection.readTimeout = 45000
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("User-Agent", userAgent)
-            val status = connection.responseCode
+            val status = try {
+                connection.responseCode
+            } catch (error: Exception) {
+                connection.disconnect()
+                throw error
+            }
             if (status in 300..399) {
                 val location = connection.getHeaderField("Location")
                 connection.disconnect()
@@ -327,8 +338,10 @@ class MinecraftInstaller(
     }
 
     private fun writeAtomically(target: File, bytes: ByteArray) {
-        target.parentFile?.mkdirs()
-        val temp = File(target.parentFile, target.name + ".tmp")
+        val parent = target.parentFile ?: error("Destino sem pasta pai.")
+        if (!parent.exists() && !parent.mkdirs()) error("Não foi possível criar ${parent.path}")
+        require(parent.isDirectory) { "A pasta de destino não é válida." }
+        val temp = File(parent, target.name + ".tmp")
         temp.writeBytes(bytes)
         if (target.exists() && !target.delete()) error("Não foi possível atualizar ${target.name}")
         if (!temp.renameTo(target)) {
