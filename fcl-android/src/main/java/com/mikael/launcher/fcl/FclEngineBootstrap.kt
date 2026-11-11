@@ -1,0 +1,137 @@
+package com.mikael.launcher.fcl
+
+import android.content.Context
+import com.mio.JavaManager
+import com.mio.manager.RendererManager
+import com.tungsten.fcl.setting.ConfigHolder
+import com.tungsten.fcl.setting.Controllers
+import com.tungsten.fcl.setting.Profiles
+import com.tungsten.fclauncher.utils.FCLPath
+import com.tungsten.fclcore.util.Logging
+import java.io.File
+import java.nio.file.Paths
+import java.util.logging.Level
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+
+data class FclBootstrapStatus(
+    val initialized: Boolean,
+    val stage: String,
+    val message: String,
+    val installedJavaRuntimes: List<String> = emptyList(),
+    val rendererCount: Int = 0,
+    val usingAppPrivateGameDirectory: Boolean = false
+) {
+    val hasAnyJavaRuntime: Boolean
+        get() = installedJavaRuntimes.isNotEmpty()
+}
+
+/**
+ * Initializes FCL's process-wide services without starting its original launcher UI.
+ *
+ * The order mirrors the pinned upstream SplashActivity: paths/logging, renderers,
+ * Java discovery, controller layouts, then ConfigHolder (which initializes accounts
+ * and profiles through Settings). All blocking disk work runs on Dispatchers.IO.
+ */
+object FclEngineBootstrap {
+    private val mutex = Mutex()
+
+    @Volatile
+    private var currentStatus = FclBootstrapStatus(
+        initialized = false,
+        stage = "not_started",
+        message = "O backend FCL ainda não foi inicializado."
+    )
+
+    fun status(): FclBootstrapStatus = currentStatus
+
+    suspend fun initialize(context: Context): FclBootstrapStatus = mutex.withLock {
+        if (currentStatus.initialized) return@withLock currentStatus
+
+        currentStatus = FclBootstrapStatus(
+            initialized = false,
+            stage = "initializing",
+            message = "Preparando bibliotecas e serviços do FCL."
+        )
+
+        try {
+            withContext(Dispatchers.IO) {
+                val appContext = context.applicationContext
+
+                // FCLPath contains static paths used by ConfigHolder and other FCL
+                // classes. It must be initialized before those classes are touched.
+                FCLPath.loadPaths(appContext)
+                Logging.start(Paths.get(FCLPath.LOG_DIR))
+
+                RendererManager.init(appContext)
+                JavaManager.init()
+                Controllers.init()
+
+                // ConfigHolder.init() initializes Settings, Accounts, Profiles and
+                // schedules a guarded controller initialization in the background.
+                if (!ConfigHolder.isInit()) {
+                    ConfigHolder.init()
+                }
+
+                // A brand-new FCL profile defaults to shared external storage.
+                // Choose its app-private profile once, so first launch does not
+                // require broad external-storage access. Existing user selection
+                // is preserved on every later start.
+                if (ConfigHolder.isNewlyCreated()) {
+                    val privateDir = runCatching {
+                        File(FCLPath.PRIVATE_COMMON_DIR).canonicalFile
+                    }.getOrNull()
+                    val privateProfile = privateDir?.let { target ->
+                        Profiles.profiles.firstOrNull { profile ->
+                            runCatching { profile.gameDir.canonicalFile == target }.getOrDefault(false)
+                        }
+                    }
+                    if (privateProfile != null) {
+                        Profiles.setSelectedProfile(privateProfile)
+                    }
+                }
+
+                val installedRuntimes = File(FCLPath.JAVA_PATH)
+                    .listFiles()
+                    .orEmpty()
+                    .filter { it.isDirectory && File(it, "release").isFile }
+                    .map { it.name }
+                    .sorted()
+
+                val selectedProfile = runCatching { Profiles.getSelectedProfile() }.getOrNull()
+                val privateGameDirectory = selectedProfile?.let { profile ->
+                    runCatching {
+                        profile.gameDir.canonicalFile ==
+                            File(FCLPath.PRIVATE_COMMON_DIR).canonicalFile
+                    }.getOrDefault(false)
+                } ?: false
+
+                FclBootstrapStatus(
+                    initialized = true,
+                    stage = "ready",
+                    message = if (installedRuntimes.isEmpty()) {
+                        "Serviços FCL preparados. Ainda falta instalar um runtime Java ARM64."
+                    } else {
+                        "Serviços FCL preparados; runtimes Java detectados."
+                    },
+                    installedJavaRuntimes = installedRuntimes,
+                    rendererCount = RendererManager.rendererList.size,
+                    usingAppPrivateGameDirectory = privateGameDirectory
+                )
+            }.also { result ->
+                currentStatus = result
+            }
+        } catch (error: Throwable) {
+            runCatching {
+                Logging.LOG.log(Level.SEVERE, "Failed to initialize FCL engine services", error)
+            }
+            FclBootstrapStatus(
+                initialized = false,
+                stage = "failed",
+                message = "Falha ao preparar o backend FCL (${error.javaClass.simpleName})."
+            ).also { currentStatus = it }
+        }
+    }
+}
