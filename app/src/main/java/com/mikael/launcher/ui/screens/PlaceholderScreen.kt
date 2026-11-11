@@ -240,10 +240,14 @@ private fun VersionsScreen() {
     var loadError by remember { mutableStateOf<String?>(null) }
     var catalog by remember { mutableStateOf<List<MinecraftCatalogVersion>>(emptyList()) }
     var profiles by remember {
-        mutableStateOf(prefs.getString("launcher_version_profiles", "").orEmpty().split("\n").filter { it.isNotBlank() })
+        mutableStateOf(prefs.getString("launcher_installed_version_profiles", "").orEmpty().split("\n").filter { it.isNotBlank() })
     }
     var selectedProfile by remember {
-        mutableStateOf(prefs.getString("launcher_selected_version_profile", "").orEmpty())
+        mutableStateOf(
+            prefs.getString("launcher_selected_version_profile", "").orEmpty()
+                .takeIf { selected -> profiles.contains(selected) }
+                .orEmpty()
+        )
     }
 
     LaunchedEffect(engine, retryCount) {
@@ -264,7 +268,7 @@ private fun VersionsScreen() {
         profiles = updated.distinct()
         selectedProfile = selected
         prefs.edit()
-            .putString("launcher_version_profiles", profiles.joinToString("\n"))
+            .putString("launcher_installed_version_profiles", profiles.joinToString("\n"))
             .putString("launcher_selected_version_profile", selectedProfile)
             .apply()
     }

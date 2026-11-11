@@ -55,7 +55,7 @@ import com.mikael.launcher.ui.theme.TextPrimary
 import com.mikael.launcher.ui.theme.TextSecondary
 
 private const val VERSION_PREFS = "mikael_launcher_preferences"
-private const val INSTALLED_VERSION_PROFILES = "launcher_version_profiles"
+private const val INSTALLED_VERSION_PROFILES = "launcher_installed_version_profiles"
 private const val SELECTED_VERSION_PROFILE = "launcher_selected_version_profile"
 
 @Composable
@@ -65,7 +65,13 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit) {
     var versionProfiles by remember {
         mutableStateOf(prefs.getString(INSTALLED_VERSION_PROFILES, "").orEmpty().split("\n").filter { it.isNotBlank() })
     }
-    var selectedVersion by remember { mutableStateOf(prefs.getString(SELECTED_VERSION_PROFILE, "").orEmpty()) }
+    var selectedVersion by remember {
+        mutableStateOf(
+            prefs.getString(SELECTED_VERSION_PROFILE, "").orEmpty()
+                .takeIf { it in versionProfiles }
+                .orEmpty()
+        )
+    }
     var showVersionPicker by remember { mutableStateOf(false) }
     var showStartNotice by remember { mutableStateOf(false) }
     Column(
