@@ -20,7 +20,7 @@ class ModLoaderProfileInstallerTest {
         val merged = mergeLoaderProfile(base, loader, "fabric-loader-0.15.0-1.20.1", "1.20.1")
 
         assertEquals("fabric-loader-0.15.0-1.20.1", merged.getString("id"))
-        assertEquals("1.20.1", merged.getString("inheritsFrom"))
+        assertEquals(false, merged.has("inheritsFrom"))
         assertEquals("net.fabricmc.loader.impl.launch.knot.KnotClient", merged.getString("mainClass"))
         assertEquals(2, merged.getJSONArray("libraries").length())
         assertEquals("org.example:base:1.0", merged.getJSONArray("libraries").getJSONObject(0).getString("name"))
