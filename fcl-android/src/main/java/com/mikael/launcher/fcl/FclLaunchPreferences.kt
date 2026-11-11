@@ -37,7 +37,7 @@ data class FclLaunchPreferences(
 fun rendererIdForLabel(label: String?): String? = when (label?.trim()?.lowercase()) {
     "gl4es" -> Renderer.ID_GL4ES
     "zink" -> Renderer.ID_ZINK
-    "vgpu" -> Renderer.ID_VGPU
+    "vgpu", "virgl" -> Renderer.ID_VGPU
     else -> null
 }
 
