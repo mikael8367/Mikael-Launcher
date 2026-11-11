@@ -43,12 +43,6 @@ kotlin {
     }
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
-}
-
     packaging {
         jniLibs {
             // FCL ships bytehook in its native source set and CMake also imports the AAR copy.
