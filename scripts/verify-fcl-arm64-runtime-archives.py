@@ -6,7 +6,6 @@ import sys
 import tarfile
 from pathlib import Path
 
-ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else "fcl-android/build/generated")
 VERSIONS = {
     "jre8": ("jre/lib/aarch64/server/libjvm.so",),
     "jre17": ("lib/aarch64/server/libjvm.so",),
@@ -18,7 +17,9 @@ def members(archive: Path) -> set[str]:
     with tarfile.open(archive, mode="r:xz") as tar:
         names = set()
         for item in tar.getmembers():
-            name = item.name.lstrip("./")
+            name = item.name
+            while name.startswith("./"):
+                name = name[2:]
             path = PurePosixPath(name)
             if path.is_absolute() or ".." in path.parts:
                 raise SystemExit(f"Unsafe archive path in {archive}: {item.name}")
