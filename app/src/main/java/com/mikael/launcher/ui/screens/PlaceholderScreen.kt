@@ -237,6 +237,9 @@ private fun VersionsScreen() {
     var installRequested by rememberSaveable { mutableStateOf(false) }
     var installProgress by remember { mutableStateOf<MinecraftInstallProgress?>(null) }
     var installError by remember { mutableStateOf<String?>(null) }
+    var loaderVersions by remember { mutableStateOf<List<com.mikael.launcher.engine.java.LoaderRelease>>(emptyList()) }
+    var selectedLoaderVersion by rememberSaveable { mutableStateOf("") }
+    var loaderCatalogMessage by remember { mutableStateOf("") }
     var installedVersion by rememberSaveable { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var retryCount by remember { mutableIntStateOf(0) }
@@ -267,6 +270,38 @@ private fun VersionsScreen() {
         }
     }
 
+    LaunchedEffect(selectedVersion, selectedLoader) {
+        val backend = when (selectedLoader) {
+            "Fabric" -> com.mikael.launcher.engine.java.SupportedProfileLoader.FABRIC
+            "Quilt" -> com.mikael.launcher.engine.java.SupportedProfileLoader.QUILT
+            else -> null
+        }
+        if (backend == null) {
+            loaderVersions = emptyList()
+            selectedLoaderVersion = ""
+            loaderCatalogMessage = if (selectedLoader == "Vanilla") "" else
+                "$selectedLoader ainda não possui instalador Android integrado."
+        } else {
+            loaderCatalogMessage = "Consultando versões compatíveis..."
+            try {
+                val releases = com.mikael.launcher.engine.java.ModLoaderProfileInstaller(
+                    context.filesDir.resolve("minecraft")
+                ).availableVersions(selectedVersion, backend)
+                loaderVersions = releases
+                selectedLoaderVersion = releases.firstOrNull()?.version.orEmpty()
+                loaderCatalogMessage = if (releases.isEmpty()) {
+                    "Nenhuma versão de $selectedLoader foi publicada para Minecraft $selectedVersion."
+                } else {
+                    "${releases.size} versões compatíveis encontradas."
+                }
+            } catch (error: Exception) {
+                loaderVersions = emptyList()
+                selectedLoaderVersion = ""
+                loaderCatalogMessage = error.message ?: "Falha ao consultar o catálogo de $selectedLoader."
+            }
+        }
+    }
+
     fun saveProfiles(updated: List<String>, selected: String) {
         profiles = updated.distinct()
         selectedProfile = selected
@@ -283,15 +318,30 @@ private fun VersionsScreen() {
         try {
             val entry = catalog.firstOrNull { it.id == selectedVersion }
                 ?: error("A versão selecionada não está disponível no catálogo oficial.")
-            val result = MinecraftInstaller(context.filesDir.resolve("minecraft")).install(
+            val gameDir = context.filesDir.resolve("minecraft")
+            MinecraftInstaller(gameDir).install(
                 versionId = entry.id,
                 metadataUrl = entry.url,
                 metadataSha1 = entry.sha1
             ) { progress ->
                 installProgress = progress
             }
-            saveProfiles(profiles + result.versionId, result.versionId)
-            installedVersion = result.versionId
+            if (selectedLoader == "Vanilla") {
+                saveProfiles(profiles + entry.id, entry.id)
+                installedVersion = entry.id
+            } else {
+                val backend = when (selectedLoader) {
+                    "Fabric" -> com.mikael.launcher.engine.java.SupportedProfileLoader.FABRIC
+                    "Quilt" -> com.mikael.launcher.engine.java.SupportedProfileLoader.QUILT
+                    else -> error("O instalador real de $selectedLoader ainda não está integrado.")
+                }
+                val loaderVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
+                    ?: error("Não há uma versão compatível de $selectedLoader selecionada.")
+                val result = com.mikael.launcher.engine.java.ModLoaderProfileInstaller(gameDir)
+                    .install(entry.id, backend, loaderVersion)
+                saveProfiles(profiles + result.profileId, result.profileId)
+                installedVersion = result.profileId
+            }
             showInfo = true
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -421,26 +471,43 @@ private fun VersionsScreen() {
                 }
             }
             Text(
-                if (selectedLoader == "Vanilla") {
-                    "Vanilla: instalação oficial do cliente e dependências."
-                } else {
-                    "$selectedLoader selecionado para Minecraft $selectedVersion. O catálogo/instalador específico deste loader ainda precisa ser integrado; ele não será marcado como instalado antes de baixar e validar o perfil real."
+                when (selectedLoader) {
+                    "Vanilla" -> "Vanilla: instalação oficial do cliente e dependências."
+                    "Fabric", "Quilt" -> loaderCatalogMessage
+                    else -> "$selectedLoader: instalador específico ainda não integrado. Não será exibido como instalável."
                 },
-                color = if (selectedLoader == "Vanilla") TextSecondary else AccentYellow,
+                color = if (selectedLoader == "Vanilla" || selectedLoader == "Fabric" || selectedLoader == "Quilt") TextSecondary else AccentYellow,
                 fontSize = 10.sp
             )
+            if (selectedLoader == "Fabric" || selectedLoader == "Quilt") {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    loaderVersions.take(8).forEach { release ->
+                        FilterChip(
+                            selected = selectedLoaderVersion == release.version,
+                            onClick = { selectedLoaderVersion = release.version },
+                            label = { Text(release.version + if (release.stable) " • estável" else "", fontSize = 9.sp) }
+                        )
+                    }
+                }
+            }
             AnimatedLauncherButton(
                 text = when {
                     installRequested -> "Instalando..."
                     selectedLoader == "Vanilla" -> "⬇  Baixar e instalar Vanilla"
-                    else -> "Instalador de $selectedLoader pendente"
+                    selectedLoader == "Fabric" || selectedLoader == "Quilt" -> "⬇  Instalar $selectedLoader"
+                    else -> "$selectedLoader indisponível"
                 },
                 onClick = {
                     if (!installRequested) {
-                        if (selectedLoader == "Vanilla") {
+                        if (selectedLoader == "Vanilla" ||
+                            (selectedLoader == "Fabric" || selectedLoader == "Quilt") && selectedLoaderVersion.isNotBlank()
+                        ) {
                             installRequested = true
                         } else {
-                            installError = "O backend de instalação de $selectedLoader ainda não foi conectado. Selecione Vanilla para instalar o cliente base."
+                            installError = "$selectedLoader não possui um instalador compatível disponível para esta versão."
                         }
                     }
                 },
@@ -493,7 +560,7 @@ private fun VersionsScreen() {
     }
     if (showInfo) InfoDialog(
         "Instalação concluída",
-        "Minecraft $installedVersion foi baixado para o armazenamento privado do launcher. O perfil já aparece na tela inicial. A execução ainda depende da integração do runtime ARM64 e do adaptador FCL."
+        "O perfil $installedVersion foi instalado no armazenamento privado do launcher. A inicialização real ainda depende da integração do runtime ARM64 e do adaptador FCL."
     ) { showInfo = false }
 }
 
