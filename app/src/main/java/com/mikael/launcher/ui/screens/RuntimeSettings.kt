@@ -61,7 +61,7 @@ fun RuntimeSettingsPanel() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE) }
     var runtime by remember { mutableStateOf(prefs.getString(PREF_RUNTIME, "Java 8") ?: "Java 8") }
-    var renderer by remember { mutableStateOf(prefs.getString(PREF_RENDERER, "GL4ES") ?: "GL4ES") }
+    var renderer by remember { mutableStateOf(prefs.getString(PREF_RENDERER, "GL4ES")?.let { if (it == "VirGL") "VGPU" else it } ?: "GL4ES") }
     var javaArgs by remember { mutableStateOf(prefs.getString(PREF_JVM_ARGS, "") ?: "") }
     var ramLimit by remember { mutableStateOf(prefs.getString(PREF_RAM, "2048 MB") ?: "2048 MB") }
     var installNotice by remember { mutableStateOf(false) }
