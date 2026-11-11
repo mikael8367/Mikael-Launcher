@@ -50,7 +50,7 @@ internal const val PREF_JVM_ARGS = "selected_jvm_arguments"
 internal const val PREF_GAME_TREE_URI = "minecraft_game_tree_uri"
 
 val JAVA_RUNTIMES = listOf("Java 8", "Java 17", "Java 21", "Java 25")
-val RENDERER_BACKENDS = listOf("GL4ES", "Zink", "VirGL", "ANGLE", "Vulkan (experimental)", "Software")
+val RENDERER_BACKENDS = listOf("GL4ES", "Zink", "VirGL")
 
 /** Parses "Java 17" into 17. Returns null instead of crashing on corrupted preferences. */
 internal fun runtimeMajorFromLabel(label: String): Int? =
@@ -62,7 +62,7 @@ fun RuntimeSettingsPanel() {
     val prefs = remember { context.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE) }
     var runtime by remember { mutableStateOf(prefs.getString(PREF_RUNTIME, "Java 8") ?: "Java 8") }
     var renderer by remember { mutableStateOf(prefs.getString(PREF_RENDERER, "GL4ES") ?: "GL4ES") }
-    var javaArgs by remember { mutableStateOf(prefs.getString(PREF_JVM_ARGS, "-Xms512M -Xmx2G") ?: "-Xms512M -Xmx2G") }
+    var javaArgs by remember { mutableStateOf(prefs.getString(PREF_JVM_ARGS, "") ?: "") }
     var ramLimit by remember { mutableStateOf(prefs.getString(PREF_RAM, "2048 MB") ?: "2048 MB") }
     var installNotice by remember { mutableStateOf(false) }
     var installing by remember { mutableStateOf(false) }
@@ -113,7 +113,7 @@ fun RuntimeSettingsPanel() {
             value = javaArgs,
             onValueChange = { javaArgs = it; prefs.edit().putString(PREF_JVM_ARGS, it).apply() },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Argumentos JVM") },
+            label = { Text("Argumentos JVM opcionais") },
             minLines = 2
         )
         val runtimeFolder = when (runtime) {
