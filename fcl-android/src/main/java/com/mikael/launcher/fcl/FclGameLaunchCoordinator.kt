@@ -21,6 +21,7 @@ import com.tungsten.fclcore.task.Task
 import com.tungsten.fclcore.task.TaskExecutor
 import com.tungsten.fclcore.task.TaskListener
 import com.tungsten.fclcore.util.versioning.VersionNumber
+import com.tungsten.fclcore.util.versioning.GameVersionNumber
 import org.lwjgl.glfw.CallbackBridge
 import java.io.File
 import java.nio.file.Files
@@ -155,6 +156,17 @@ object FclGameLaunchCoordinator {
             }
             check(RendererManager.findRenderer(renderer.id) != null) {
                 "O renderizador $rendererPreference não foi registrado pelo FCL."
+            }
+            val detectedGameVersion = GameVersionNumber.asGameVersion(gameVersion ?: versionId)
+            if (renderer.minMCver.isNotBlank()) {
+                check(detectedGameVersion.compareTo(renderer.minMCver) >= 0) {
+                    "$rendererPreference não suporta Minecraft $versionId; versão mínima: ${renderer.minMCver}."
+                }
+            }
+            if (renderer.maxMCver.isNotBlank()) {
+                check(detectedGameVersion.compareTo(renderer.maxMCver) <= 0) {
+                    "$rendererPreference não suporta Minecraft $versionId; versão máxima: ${renderer.maxMCver}."
+                }
             }
             setting.renderer = renderer.id
             profile.setRendererOverride(versionId, null)
