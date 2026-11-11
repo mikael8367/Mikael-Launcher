@@ -38,10 +38,8 @@ class MinecraftInstallForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (MinecraftInstallSession.inProgress) {
-            stopSelf(startId)
-            return START_NOT_STICKY
-        }
+        // A repeated tap must not stop the already-running service/download.
+        if (MinecraftInstallSession.inProgress) return START_NOT_STICKY
         val notification = buildNotification("Preparando instalação…", null, null)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
