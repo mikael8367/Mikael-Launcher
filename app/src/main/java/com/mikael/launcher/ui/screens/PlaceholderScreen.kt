@@ -27,6 +27,8 @@ import java.net.HttpURLConnection
 import org.json.JSONObject
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import com.mikael.launcher.engine.java.MinecraftInstaller
+import com.mikael.launcher.engine.java.MinecraftInstallProgress
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.horizontalScroll
@@ -174,7 +176,9 @@ private fun PlayScreen() {
 private data class MinecraftCatalogVersion(
     val id: String,
     val type: String,
-    val releaseTime: String
+    val releaseTime: String,
+    val url: String,
+    val sha1: String
 )
 
 private const val MOJANG_VERSION_MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
@@ -190,7 +194,7 @@ private suspend fun fetchMinecraftVersions(): List<MinecraftCatalogVersion> = wi
         buildList {
             for (index in 0 until versions.length()) {
                 val item = versions.getJSONObject(index)
-                add(MinecraftCatalogVersion(item.getString("id"), item.getString("type"), item.optString("releaseTime")))
+                add(MinecraftCatalogVersion(item.getString("id"), item.getString("type"), item.optString("releaseTime"), item.getString("url"), item.optString("sha1")))
             }
         }
     } finally {
@@ -221,6 +225,10 @@ private fun VersionsScreen() {
     var selectedTab by rememberSaveable { mutableStateOf("Recentes") }
     var searchText by rememberSaveable { mutableStateOf("") }
     var showInfo by rememberSaveable { mutableStateOf(false) }
+    var installRequested by rememberSaveable { mutableStateOf(false) }
+    var installProgress by remember { mutableStateOf<MinecraftInstallProgress?>(null) }
+    var installError by remember { mutableStateOf<String?>(null) }
+    var installDone by rememberSaveable { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var retryCount by remember { mutableIntStateOf(0) }
     var loadError by remember { mutableStateOf<String?>(null) }
@@ -253,6 +261,31 @@ private fun VersionsScreen() {
             .putString("launcher_version_profiles", profiles.joinToString("\n"))
             .putString("launcher_selected_version_profile", selectedProfile)
             .apply()
+    }
+
+    LaunchedEffect(installRequested) {
+        if (!installRequested) return@LaunchedEffect
+        installError = null
+        installDone = false
+        installProgress = null
+        try {
+            val entry = catalog.firstOrNull { it.id == selectedVersion }
+                ?: error("A versão selecionada não está disponível no catálogo oficial.")
+            val result = MinecraftInstaller(context.filesDir.resolve("minecraft")).install(
+                versionId = entry.id,
+                metadataUrl = entry.url,
+                metadataSha1 = entry.sha1
+            ) { progress ->
+                installProgress = progress
+            }
+            saveProfiles(profiles + result.versionId, result.versionId)
+            installDone = true
+            showInfo = true
+        } catch (error: Exception) {
+            installError = error.message ?: "Falha desconhecida durante a instalação."
+        } finally {
+            installRequested = false
+        }
     }
 
     val filteredVersions = remember(catalog, selectedTab, searchText) {
@@ -353,15 +386,39 @@ private fun VersionsScreen() {
             selected = true,
             onClick = { }
         )
-        AnimatedLauncherButton(
-            text = "＋  Criar instalação",
-            onClick = {
-                val profile = if (engine == "Java") selectedVersion else "Horizon Rust"
-                saveProfiles(profiles + profile, profile)
-                showInfo = true
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
+        if (engine == "Java") {
+            AnimatedLauncherButton(
+                text = if (installRequested) "Instalando..." else "⬇  Baixar e instalar versão",
+                onClick = {
+                    if (!installRequested) {
+                        installDone = false
+                        installRequested = true
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                "O instalador baixa o cliente, bibliotecas aplicáveis, arquivos nativos, índice e objetos de assets e configuração de logs.",
+                color = TextSecondary,
+                fontSize = 10.sp
+            )
+            installProgress?.let { progress ->
+                Text(
+                    "${progress.stage}: ${progress.completed}/${progress.total}\n${progress.currentFile}",
+                    color = PrimaryGreen,
+                    fontSize = 10.sp
+                )
+            }
+            installError?.let { error ->
+                Text("Falha na instalação: $error", color = AccentYellow, fontSize = 11.sp)
+            }
+        } else {
+            AnimatedLauncherButton(
+                text = "＋  Criar instalação",
+                onClick = { showInfo = true },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
 
         SectionLabel("INSTALAÇÕES ADICIONADAS")
         if (profiles.isEmpty()) {
@@ -386,8 +443,8 @@ private fun VersionsScreen() {
         }
     }
     if (showInfo) InfoDialog(
-        "Perfil criado",
-        "O perfil foi salvo e já pode ser escolhido na tela inicial. Os arquivos do jogo, bibliotecas e assets ainda precisam ser baixados pelo instalador real."
+        "Instalação concluída",
+        "Minecraft $selectedVersion foi baixado para o armazenamento privado do launcher. O perfil já aparece na tela inicial. A execução ainda depende da integração do runtime ARM64 e do adaptador FCL."
     ) { showInfo = false }
 }
 
