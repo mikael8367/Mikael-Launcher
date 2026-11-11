@@ -39,8 +39,10 @@ jobs:
         with:
           targets: aarch64-linux-android
           components: rustfmt, clippy
-      - name: Set up Android SDK and NDK
+      - name: Set up Android SDK command-line tools
         uses: android-actions/setup-android@v3
+        with:
+          packages: ''
       - name: Install Android NDK
         run: sdkmanager "ndk;27.2.12479018"
       - name: Configure Android NDK
