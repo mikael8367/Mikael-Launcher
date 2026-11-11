@@ -149,7 +149,7 @@ internal fun GameStorageLocationPanel() {
         Text("Local atual: $folderName", color = TextPrimary, fontSize = 12.sp)
         Text(if (hasFileAccess) "Acesso amplo aos arquivos: permitido" else "Acesso amplo aos arquivos: não concedido", color = if (hasFileAccess) PrimaryGreen else TextSecondary, fontSize = 10.sp)
         OutlinedButton(onClick = { requestFileAccess() }) { Text(if (hasFileAccess) "Gerenciar permissão de arquivos" else "Permitir acesso aos arquivos") }
-        Text("No Android 11 ou superior, o Android abre a tela especial de acesso a todos os arquivos. No Android 8 a 10, aparece a solicitação de leitura e gravação. A permissão é opcional quando você usa apenas a pasta escolhida pelo seletor.", color = TextSecondary, fontSize = 10.sp)
+        Text("No Android 11 ou superior, o Android abre a tela especial de acesso a todos os arquivos. No Android 8 a 10, aparece a solicitação de leitura e gravação. Para usar a pasta personalizada nos instaladores e no FCL, a permissão também é necessária.", color = TextSecondary, fontSize = 10.sp)
         Text(if (applyingFolder) "Aplicando pasta ao FCL..." else status, color = TextSecondary, fontSize = 10.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedButton(onClick = { folderPicker.launch(null) }) { Text("Escolher pasta") }
