@@ -2,40 +2,55 @@
 
 ## Decisão técnica
 
-O Mikael Launcher manterá a interface Kotlin/Jetpack Compose. O motor Java será integrado como backend isolado, sem misturar o código do Horizon Rust.
+O Mikael Launcher mantém a interface Kotlin/Jetpack Compose. O motor Minecraft Java usa o Fold Craft Launcher (FCL) como backend Android/JVM, isolado do motor Horizon Rust.
 
-O código upstream do Fold Craft Launcher foi fixado como submódulo Git em:
+O upstream FCL está fixado no submódulo:
 
 - Repositório: https://github.com/FCL-Team/FoldCraftLauncher
-- Commit fixado: `f5bb1526eb371d81cb086d74cdb8535043b51ee4`
-- Licença declarada pelo projeto: GNU GPL v3.0
+- Commit: `f5bb1526eb371d81cb086d74cdb8535043b51ee4`
+- Licença declarada: GNU GPL v3.0
 
-Fixar um commit evita que uma atualização upstream inesperada altere o motor durante o desenvolvimento.
+A versão ARM64 é o primeiro alvo de execução. O código upstream é consumido pelo módulo Android `:fcl-android`; o backend CMake/JNI fica isolado em `:fcl-native`.
 
-## Estado desta etapa
+## O que já está conectado
 
-- [x] Registrar o upstream FCL como submódulo.
-- [x] Fixar o commit upstream usado como base.
-- [x] Preparar o checkout do submódulo no CI.
-- [x] Auditar os módulos Android, bibliotecas nativas e dependências do FCL.
-- [x] Criar o módulo isolado `:fcl-native` para compilar o CMake/JNI FCL em ARM64 e importar as bibliotecas nativas upstream.
-- [ ] Adaptar o módulo Android/Kotlin do FCL à Activity e ao ciclo de vida do Mikael Launcher.
-- [x] Implementar a primeira camada independente de instalação Vanilla pelo manifesto oficial (client, bibliotecas Maven aplicáveis, cache de classifiers nativos, assets e logging; sem inicialização do jogo).
-- [ ] Adaptar o GameRepository/DependencyManager do FCL, extração e substituição de natives Android ARM64 e layout histórico de assets.
-- [ ] Integrar runtimes Java e renderizadores reais ao `FCLGameLauncher` / `FCLBridge`.
-- [ ] Ligar o botão Iniciar ao fluxo real `LauncherHelper → FCLGameLauncher → FCLBridge → JVMActivity` e encaminhar stdout/stderr para Logs.
-- [ ] Validar Vanilla, Forge, Fabric e OptiFine em dispositivos ARM64 reais.
+- [x] Submódulo FCL fixado e checkout reproduzível no CI.
+- [x] Módulos `:fcl-android`, `:fcl-native`, `:Terracotta` e `:ZipFileSystem` incluídos no build.
+- [x] Classes Kotlin/Java, recursos, assets, manifesto e JNI do FCL consumidos pelo módulo Android.
+- [x] `FCLApp`, inicialização de caminhos/logs, `RendererManager`, `JavaManager`, perfis e controles inicializados sem abrir a interface original do FCL.
+- [x] Runtime ARM64 empacotado e instalador com staging, validação ELF e rollback.
+- [x] Renderizadores GL4ES, Zink e VGPU disponíveis pelo registro FCL.
+- [x] Instalador Vanilla com metadados, client, bibliotecas, natives, assets e logging.
+- [x] Integração dos instaladores de Forge, NeoForge, Fabric, Quilt e OptiFine conforme os backends disponíveis no projeto.
+- [x] Coordenador de inicialização que prepara versão, dependências, runtime, autenticação offline, JNA/LWJGL, `FCLBridge` e `JVMActivity`.
+- [x] Botão **Iniciar Minecraft** ligado ao coordenador real; lista de perfis é consultada no repositório FCL.
+- [x] Preferências de runtime, renderizador e memória aplicadas a uma configuração FCL específica por versão.
+- [x] Serviço de sessão de jogo do FCL declarado no manifesto mesclado para manter a sessão em primeiro plano enquanto o jogo estiver aberto.
+- [x] Testes unitários para validação de nome offline, disponibilidade do motor, runtime e instaladores.
+- [x] CI compila as fontes Android/Kotlin, executa testes e compila/verifica o backend nativo ARM64.
 
-**Importante:** a camada CMake/JNI ARM64 agora compila como módulo separado, mas isso ainda não equivale a uma integração executável. O FCL Java/Kotlin, seus recursos/manifesto, os runtimes e o fluxo `FCLBridge` + `JVMActivity` ainda não foram incorporados. O motor não deve ser apresentado como funcional até que todas essas partes estejam ligadas e testadas em dispositivo ARM64.
+## O que ainda exige validação real
 
-## Por que a integração será gradual
+A compilação do CI prova que as fontes e bibliotecas são construíveis; não prova que o Minecraft inicia corretamente no dispositivo. Antes de declarar o motor pronto:
 
-O FCL não é uma dependência Android pequena: inclui o app Android `:FCL`, os módulos `:ZipFileSystem` e `:Terracotta`, dependências AAR/JAR, centenas de recursos/assets, CMake/JNI, SDL e a atividade de superfície de jogo. O app upstream usa AGP 8.13.2, Kotlin 2.4.10 e Gradle 8.14.4; o Mikael Launcher ainda usa AGP 8.7.3, Kotlin 2.0.21 e Gradle 8.9.
+- [ ] Instalar Java 8 ARM64 e iniciar Minecraft Vanilla 1.12.2 no Galaxy A12.
+- [ ] Validar a superfície gráfica, toque, teclado, áudio, controles e retorno ao launcher.
+- [ ] Testar versões modernas com Java 17 e o renderizador adequado.
+- [ ] Validar Forge 1.12.2, OptiFine e Forge + OptiFine em instalação limpa; investigar o erro anterior do OptiFine patcher.
+- [ ] Validar Fabric, Quilt e NeoForge individualmente, incluindo bibliotecas e metadados.
+- [ ] Testar memória baixa, troca de aplicativo, rotação, pausa/retomada e encerramento inesperado.
+- [ ] Integrar autenticação Microsoft antes de oferecer esse método de conta.
+- [ ] Integrar streaming de logs e diagnóstico diretamente na tela Logs.
+- [ ] Rever o encerramento do processo upstream: o FCL pode encerrar o processo do launcher ao sair do jogo; retorno automático à tela Compose ainda não foi garantido.
 
-A primeira integração real isolou o CMake/JNI em `:fcl-native`, sem alterar a interface atual nem substituir o aplicativo principal do launcher. A próxima etapa é transformar/adaptar o módulo Android FCL para ser consumido pelo app principal, tratando o manifesto, `FCLApp`, `JVMActivity`, recursos e dependências Gradle. O fluxo nativo só será usado depois que a Activity puder fornecer a superfície gráfica correta ao `FCLBridge`.
+## Limitações conhecidas
+
+- O botão de iniciar usa conta offline. Não deve ser anunciado como login Microsoft.
+- GL4ES, Zink e VGPU são as opções expostas pelo launcher nesta integração. ANGLE e Software não são apresentados como opções FCL suportadas.
+- Horizon Rust continua independente e não é usado como fallback do Minecraft Java.
+- O launcher não deve afirmar que o jogo está funcionando apenas porque a versão aparece na lista ou porque o CI passou.
+- Nenhum APK é gerado automaticamente; a geração do APK depende de pedido explícito.
 
 ## Licença e atribuição
 
-O código upstream do Fold Craft Launcher é distribuído sob GNU GPL v3.0. Ao incorporar ou distribuir uma versão modificada/derivada, o projeto deverá cumprir as condições aplicáveis da GPL-3.0, incluindo fornecer o código-fonte correspondente e preservar avisos de copyright/licença. As dependências nativas e bibliotecas de terceiros também precisam de uma auditoria de licença individual.
-
-Até a conclusão da integração, o submódulo permanece separado do módulo `:app`; não se deve remover ou alterar avisos de licença do upstream.
+O código upstream do Fold Craft Launcher é distribuído sob GNU GPL v3.0. A incorporação e distribuição de uma versão modificada/derivada deve cumprir as condições aplicáveis da GPL-3.0, incluindo fornecer o código-fonte correspondente e preservar avisos de copyright/licença. Cada dependência de terceiros continua sujeita à sua própria licença.
