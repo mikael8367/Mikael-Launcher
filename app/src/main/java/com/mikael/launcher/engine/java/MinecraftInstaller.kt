@@ -86,7 +86,7 @@ class MinecraftInstaller(
             for (i in 0 until libraries.length()) {
                 val library = libraries.optJSONObject(i) ?: continue
                 if (!libraryApplies(library)) continue
-                val name = library.optString("name")
+                val name = library.optString("name").orEmpty()
                 val libDownloads = library.optJSONObject("downloads")
                 val artifact = libDownloads?.optJSONObject("artifact")
                 if (artifact != null) {
