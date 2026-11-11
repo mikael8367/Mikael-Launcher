@@ -26,7 +26,8 @@ sealed interface JavaRuntimeInspection {
  * Expected FCL-style runtime layout:
  *   release
  *   bin/java
- *   lib/server/libjvm.so
+ *   lib/<OS_ARCH>/server/libjvm.so (FCL Android JRE layout)
+ *   jre/lib/<OS_ARCH>/server/libjvm.so (JDK 8 layout)
  */
 object JavaRuntimeInspector {
     private data class ElfTarget(val elfClass: Int, val machine: Int)
@@ -80,10 +81,40 @@ object JavaRuntimeInspector {
             )
         }
 
-        val jvm = File(root, "lib/server/libjvm.so")
-        if (!jvm.isFile) {
-            return invalid("jvm_library_missing", "A biblioteca lib/server/libjvm.so não foi encontrada.")
+        val osArch = Regex("""(?m)^OS_ARCH="?([^"\\r\\n]+)"?\\s*$""")
+            .find(releaseText)?.groupValues?.getOrNull(1)?.trim()
+        val archDirectories = listOfNotNull(
+            osArch,
+            when (expectedAbi) {
+                "arm64-v8a" -> "aarch64"
+                "armeabi-v7a" -> "arm"
+                "x86" -> "i386"
+                "x86_64" -> "amd64"
+                else -> null
+            },
+            when (expectedAbi) {
+                "arm64-v8a" -> "arm64"
+                "armeabi-v7a" -> "arm"
+                "x86_64" -> "x86_64"
+                else -> null
+            }
+        ).distinct()
+
+        val jvmCandidates = buildList {
+            listOf("", "jre/").forEach { prefix ->
+                add(File(root, "${prefix}lib/server/libjvm.so"))
+                add(File(root, "${prefix}lib/client/libjvm.so"))
+                archDirectories.forEach { arch ->
+                    add(File(root, "${prefix}lib/$arch/server/libjvm.so"))
+                    add(File(root, "${prefix}lib/$arch/client/libjvm.so"))
+                }
+            }
         }
+        val jvm = jvmCandidates.firstOrNull { it.isFile }
+            ?: return invalid(
+                "jvm_library_missing",
+                "A biblioteca libjvm.so não foi encontrada nos diretórios padrão deste runtime."
+            )
 
         val elf = readElfTarget(jvm) ?: return invalid(
             "invalid_jvm_elf",
