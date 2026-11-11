@@ -31,6 +31,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import com.mikael.launcher.fcl.FclGameLaunchCoordinator
 import androidx.compose.runtime.Composable
@@ -127,7 +128,9 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
                             try {
                                 FclGameLaunchCoordinator.launch(hostActivity, selectedVersion, selectedAccount)
                                 launchDialogMessage = null
-                            } catch (error: Throwable) {
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (error: Exception) {
                                 launchDialogMessage = error.message ?: "Falha desconhecida ao iniciar Minecraft."
                             } finally {
                                 isLaunching = false
