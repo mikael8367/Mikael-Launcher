@@ -227,7 +227,9 @@ private fun VersionsScreen() {
     val prefs = remember { context.getSharedPreferences("mikael_launcher_preferences", Context.MODE_PRIVATE) }
     var engine by rememberSaveable { mutableStateOf("Java") }
     var selectedVersion by rememberSaveable { mutableStateOf("1.12.2") }
-    var selectedLoader by rememberSaveable { mutableStateOf("Vanilla") }
+    var selectedLoader by rememberSaveable {
+        mutableStateOf(prefs.getString("launcher_selected_mod_loader", "Vanilla").orEmpty())
+    }
     var lastJavaVersion by rememberSaveable { mutableStateOf("1.12.2") }
     var selectedTab by rememberSaveable { mutableStateOf("Recentes") }
     var searchText by rememberSaveable { mutableStateOf("") }
@@ -407,10 +409,13 @@ private fun VersionsScreen() {
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                listOf("Vanilla", "Forge", "NeoForge", "Fabric", "Quilt", "OptiFine", "LiteLoader", "Rift").forEach { loader ->
+                listOf("Vanilla", "Forge", "NeoForge", "Fabric", "Legacy Fabric", "Quilt", "OptiFine", "LiteLoader", "Rift").forEach { loader ->
                     FilterChip(
                         selected = selectedLoader == loader,
-                        onClick = { selectedLoader = loader },
+                        onClick = {
+                            selectedLoader = loader
+                            prefs.edit().putString("launcher_selected_mod_loader", loader).apply()
+                        },
                         label = { Text(loader, fontSize = 10.sp) }
                     )
                 }
