@@ -464,7 +464,7 @@ internal data class MinecraftAssetEntry(
  */
 internal fun minecraftAssetEntries(index: JSONObject): List<MinecraftAssetEntry> {
     val objects = index.optJSONObject("objects")
-        ?: error("Índice de assets incompatível: campo objects ausente.")
+        ?: throw IllegalArgumentException("Índice de assets incompatível: campo objects ausente.")
     val entries = mutableListOf<MinecraftAssetEntry>()
     val keys = objects.keys()
     while (keys.hasNext()) {
@@ -477,7 +477,7 @@ internal fun minecraftAssetEntries(index: JSONObject): List<MinecraftAssetEntry>
             "Caminho de asset inseguro: $name"
         }
         val value = objects.optJSONObject(name)
-            ?: error("Registro de asset inválido: $name")
+            ?: throw IllegalArgumentException("Registro de asset inválido: $name")
         val hash = value.optString("hash").lowercase()
         require(hash.matches(Regex("[a-f0-9]{40}"))) {
             "Hash SHA-1 inválido no asset: $name"
