@@ -51,11 +51,7 @@ class MinecraftInstaller(
         require(maxParallelDownloads in 1..8) { "Paralelismo fora do limite permitido." }
 
         val root = gameDirectory.canonicalFile
-        if (root.exists()) {
-            require(root.isDirectory) { "O caminho de dados do Minecraft não é uma pasta." }
-        } else if (!root.mkdirs()) {
-            error("Não foi possível criar a pasta do Minecraft.")
-        }
+        ensureDirectory(root, "pasta do Minecraft")
         val metadataBytes = readUrl(metadataUrl)
         if (!metadataSha1.isNullOrBlank() && sha1(metadataBytes) != metadataSha1.lowercase()) {
             error("O SHA-1 do manifesto da versão não confere.")
@@ -125,9 +121,7 @@ class MinecraftInstaller(
             tasks += taskFromJson(logging, safeResolve(root, "versions/$versionId/$path"), "logging config")
         }
 
-        if (!versionRoot.exists() && !versionRoot.mkdirs()) {
-            error("Não foi possível criar a pasta da versão.")
-        }
+        ensureDirectory(versionRoot, "pasta da versão")
         writeAtomically(versionJson, metadataText.toByteArray(Charsets.UTF_8))
 
         val uniqueTasks = tasks.groupBy { it.target.canonicalPath }.values.map { duplicates ->
@@ -186,14 +180,14 @@ class MinecraftInstaller(
                     if (virtualLegacy) {
                         val target = safeResolve(root, "assets/virtual/legacy/${asset.name}")
                         if (!target.isFile || target.length() != source.length()) {
-                            target.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("Falha ao criar pasta de assets legados.") }
+                            target.parentFile?.let { ensureDirectory(it, "pasta de assets legados") }
                             source.copyTo(target, overwrite = true)
                         }
                     }
                     if (mapToResources) {
                         val target = safeResolve(root, "assets/resources/${asset.name}")
                         if (!target.isFile || target.length() != source.length()) {
-                            target.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("Falha ao criar pasta de resources legados.") }
+                            target.parentFile?.let { ensureDirectory(it, "pasta de resources legados") }
                             source.copyTo(target, overwrite = true)
                         }
                     }
@@ -235,7 +229,7 @@ class MinecraftInstaller(
     private fun mavenPath(coordinate: String): String = minecraftMavenPath(coordinate)
 
     private suspend fun download(task: DownloadTask) {
-        task.target.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("Falha ao criar ${it.path}") }
+        task.target.parentFile?.let { ensureDirectory(it, "diretório ${it.path}") }
         if (task.target.isFile && isValid(task.target, task.sha1, task.size)) return
         val part = File(task.target.parentFile, task.target.name + ".part")
         if (part.exists()) part.delete()
@@ -265,6 +259,20 @@ class MinecraftInstaller(
         if (!part.renameTo(task.target)) {
             part.copyTo(task.target, overwrite = true)
             part.delete()
+        }
+    }
+
+    /**
+     * File.mkdirs() returns false when another parallel download creates the same
+     * directory between exists() and mkdirs(). Treat that race as success only
+     * after verifying that the directory now exists and is actually a directory.
+     */
+    private fun ensureDirectory(directory: File, description: String) {
+        if (directory.isDirectory) return
+        if (directory.exists()) error("O caminho de $description existe, mas não é uma pasta: ${directory.path}")
+        directory.mkdirs()
+        if (!directory.isDirectory) {
+            error("Falha ao criar $description: ${directory.path}")
         }
     }
 
@@ -333,8 +341,7 @@ class MinecraftInstaller(
 
     private fun writeAtomically(target: File, bytes: ByteArray) {
         val parent = target.parentFile ?: error("Destino sem pasta pai.")
-        if (!parent.exists() && !parent.mkdirs()) error("Não foi possível criar ${parent.path}")
-        require(parent.isDirectory) { "A pasta de destino não é válida." }
+        ensureDirectory(parent, "pasta de destino")
         val temp = File(parent, target.name + ".tmp")
         temp.writeBytes(bytes)
         if (target.exists() && !target.delete()) error("Não foi possível atualizar ${target.name}")
