@@ -319,7 +319,7 @@ private fun VersionsScreen() {
         try {
             val entry = catalog.firstOrNull { it.id == selectedVersion }
                 ?: error("A versão selecionada não está disponível no catálogo oficial.")
-            val gameDir = context.filesDir.resolve("minecraft")
+            val gameDir = FclGameDirectoryResolver.resolve(context)
             MinecraftInstaller(gameDir).install(
                 versionId = entry.id,
                 metadataUrl = entry.url,
