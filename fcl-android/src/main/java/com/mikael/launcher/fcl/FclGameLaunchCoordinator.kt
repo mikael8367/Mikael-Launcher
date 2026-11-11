@@ -46,6 +46,17 @@ object FclGameLaunchCoordinator {
     fun isValidOfflineUsername(username: String): Boolean =
         username.matches(Regex("[A-Za-z0-9_]{1,16}"))
 
+    suspend fun installedVersionIds(context: Context): List<String> {
+        val appContext = context.applicationContext
+        val bootstrap = FclEngineBootstrap.initialize(appContext)
+        check(bootstrap.initialized) { bootstrap.message }
+        val profile = withContext(Dispatchers.IO) { Profiles.getSelectedProfile() }
+        return withContext(Dispatchers.IO) {
+            profile.repository.refreshVersions()
+            profile.repository.versions.map { it.id }.distinct().sorted()
+        }
+    }
+
     suspend fun launch(context: Context, versionId: String, username: String) {
         val activity = context.findActivity()
             ?: throw IllegalArgumentException("A inicialização precisa ser chamada a partir da tela do launcher.")
