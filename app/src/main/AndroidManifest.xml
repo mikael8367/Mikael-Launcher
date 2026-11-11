@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <application
+        tools:replace="android:allowBackup,android:label"
         android:name="com.tungsten.fcl.FCLApp"
         android:allowBackup="false"
         android:label="Mikael Launcher"
