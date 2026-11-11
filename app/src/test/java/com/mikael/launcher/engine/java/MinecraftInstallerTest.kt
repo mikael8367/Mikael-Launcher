@@ -2,9 +2,39 @@ package com.mikael.launcher.engine.java
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
+import org.json.JSONObject
 
 class MinecraftInstallerTest {
+    @Test
+    fun readsClientArtifactFromModernMetadata() {
+        val metadata = JSONObject(
+            """{"downloads":{"client":{"url":"https://example.invalid/client.jar","sha1":"abc"}}}"""
+        )
+        assertEquals(
+            "https://example.invalid/client.jar",
+            minecraftClientDownload(metadata)?.getString("url")
+        )
+    }
+
+    @Test
+    fun readsClientArtifactFromLegacyMainJarMetadata() {
+        val metadata = JSONObject(
+            """{"mainJar":{"downloads":{"artifact":{"url":"https://example.invalid/legacy-client.jar","sha1":"def"}}}}"""
+        )
+        assertEquals(
+            "https://example.invalid/legacy-client.jar",
+            minecraftClientDownload(metadata)?.getString("url")
+        )
+    }
+
+    @Test
+    fun returnsNoClientArtifactWhenMetadataHasNeitherFormat() {
+        assertNull(minecraftClientDownload(JSONObject("""{"id":"test"}""")))
+    }
+
     @Test
     fun resolvesStandardMavenCoordinates() {
         assertEquals(
