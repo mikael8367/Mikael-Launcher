@@ -227,6 +227,7 @@ private fun VersionsScreen() {
     val prefs = remember { context.getSharedPreferences("mikael_launcher_preferences", Context.MODE_PRIVATE) }
     var engine by rememberSaveable { mutableStateOf("Java") }
     var selectedVersion by rememberSaveable { mutableStateOf("1.12.2") }
+    var selectedLoader by rememberSaveable { mutableStateOf("Vanilla") }
     var lastJavaVersion by rememberSaveable { mutableStateOf("1.12.2") }
     var selectedTab by rememberSaveable { mutableStateOf("Recentes") }
     var searchText by rememberSaveable { mutableStateOf("") }
@@ -401,17 +402,47 @@ private fun VersionsScreen() {
             onClick = { }
         )
         if (engine == "Java") {
+            SectionLabel("MOD LOADER")
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                listOf("Vanilla", "Forge", "NeoForge", "Fabric", "Quilt", "OptiFine", "LiteLoader", "Rift").forEach { loader ->
+                    FilterChip(
+                        selected = selectedLoader == loader,
+                        onClick = { selectedLoader = loader },
+                        label = { Text(loader, fontSize = 10.sp) }
+                    )
+                }
+            }
+            Text(
+                if (selectedLoader == "Vanilla") {
+                    "Vanilla: instalação oficial do cliente e dependências."
+                } else {
+                    "$selectedLoader selecionado para Minecraft $selectedVersion. O catálogo/instalador específico deste loader ainda precisa ser integrado; ele não será marcado como instalado antes de baixar e validar o perfil real."
+                },
+                color = if (selectedLoader == "Vanilla") TextSecondary else AccentYellow,
+                fontSize = 10.sp
+            )
             AnimatedLauncherButton(
-                text = if (installRequested) "Instalando..." else "⬇  Baixar e instalar versão",
+                text = when {
+                    installRequested -> "Instalando..."
+                    selectedLoader == "Vanilla" -> "⬇  Baixar e instalar Vanilla"
+                    else -> "Instalador de $selectedLoader pendente"
+                },
                 onClick = {
                     if (!installRequested) {
-                        installRequested = true
+                        if (selectedLoader == "Vanilla") {
+                            installRequested = true
+                        } else {
+                            installError = "O backend de instalação de $selectedLoader ainda não foi conectado. Selecione Vanilla para instalar o cliente base."
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
             )
             Text(
-                "O instalador baixa o cliente, bibliotecas aplicáveis, arquivos nativos, índice e objetos de assets e configuração de logs.",
+                "O instalador base baixa o cliente, bibliotecas Java aplicáveis, índice/objetos de assets e configuração de logs. Os natives desktop não são tratados como binários Android.",
                 color = TextSecondary,
                 fontSize = 10.sp
             )
