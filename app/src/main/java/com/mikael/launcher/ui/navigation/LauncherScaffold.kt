@@ -38,8 +38,13 @@ fun LauncherScaffold(modifier: Modifier = Modifier) {
     var showRuntimeSetup by remember { mutableStateOf(!setupPrefs.getBoolean(PREF_FIRST_RUN_DONE, false)) }
     var selected by rememberSaveable { mutableStateOf(LauncherSection.HOME.name) }
     var sidebarExpanded by rememberSaveable { mutableStateOf(true) }
-    var accountNames by rememberSaveable { mutableStateOf("") }
-    var selectedAccount by rememberSaveable { mutableStateOf("") }
+    val accountPrefs = remember { context.getSharedPreferences("mikael_launcher_accounts", Context.MODE_PRIVATE) }
+    var accountNames by rememberSaveable {
+        mutableStateOf(accountPrefs.getString("account_names", "").orEmpty())
+    }
+    var selectedAccount by rememberSaveable {
+        mutableStateOf(accountPrefs.getString("selected_account", "").orEmpty())
+    }
     val accounts = accountNames.split("\\n").filter { it.isNotBlank() }.distinct()
     val currentSection = LauncherSection.valueOf(selected)
 
@@ -57,7 +62,10 @@ fun LauncherScaffold(modifier: Modifier = Modifier) {
             AccountHeader(
                 accountName = selectedAccount,
                 onOpenAccounts = { selected = LauncherSection.ACCOUNTS.name },
-                onSelectAccount = { selectedAccount = it },
+                onSelectAccount = { name ->
+                    selectedAccount = name
+                    accountPrefs.edit().putString("selected_account", name).apply()
+                },
                 accounts = accounts
             )
             AnimatedContent(
@@ -74,11 +82,22 @@ fun LauncherScaffold(modifier: Modifier = Modifier) {
                         onAddAccount = { name ->
                             accountNames = (accounts + name).distinct().joinToString("\\n")
                             selectedAccount = name
+                            accountPrefs.edit()
+                                .putString("account_names", accountNames)
+                                .putString("selected_account", selectedAccount)
+                                .apply()
                         },
-                        onSelectAccount = { selectedAccount = it },
+                        onSelectAccount = { name ->
+                            selectedAccount = name
+                            accountPrefs.edit().putString("selected_account", name).apply()
+                        },
                         onRemoveAccount = { name ->
                             accountNames = accounts.filterNot { it == name }.joinToString("\\n")
                             if (selectedAccount == name) selectedAccount = ""
+                            accountPrefs.edit()
+                                .putString("account_names", accountNames)
+                                .putString("selected_account", selectedAccount)
+                                .apply()
                         }
                     )
                     else -> PlaceholderScreen(section = section)
