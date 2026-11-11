@@ -253,9 +253,42 @@ internal fun mergeLoaderProfile(
     merged.put("id", profileId)
         .put("inheritsFrom", minecraftVersion)
         .put("libraries", libraries)
-    listOf("mainClass", "arguments", "minecraftArguments", "type").forEach { key ->
-        if (loaderProfile.has(key)) merged.put(key, loaderProfile.get(key))
+    if (loaderProfile.has("mainClass")) merged.put("mainClass", loaderProfile.get("mainClass"))
+    if (loaderProfile.has("arguments")) {
+        merged.put(
+            "arguments",
+            mergeArgumentObjects(base.optJSONObject("arguments"), loaderProfile.optJSONObject("arguments"))
+        )
     }
+    if (loaderProfile.has("minecraftArguments")) {
+        merged.put("minecraftArguments", loaderProfile.get("minecraftArguments"))
+    }
+    if (loaderProfile.has("type")) merged.put("type", loaderProfile.get("type"))
     if (loaderProfile.has("logging")) merged.put("logging", loaderProfile.get("logging"))
     return merged
+}
+
+private fun mergeArgumentObjects(base: JSONObject?, loader: JSONObject?): JSONObject {
+    val result = JSONObject()
+    val keys = linkedSetOf<String>()
+    base?.keys()?.forEach { keys.add(it) }
+    loader?.keys()?.forEach { keys.add(it) }
+    for (key in keys) {
+        val combined = JSONArray()
+        val seen = linkedSetOf<String>()
+        listOf(base?.optJSONArray(key), loader?.optJSONArray(key)).forEach { array ->
+            if (array == null) return@forEach
+            for (index in 0 until array.length()) {
+                val value = array.get(index)
+                val identity = value.toString()
+                if (seen.add(identity)) combined.put(value)
+            }
+        }
+        when {
+            combined.length() > 0 -> result.put(key, combined)
+            loader?.has(key) == true -> result.put(key, loader.get(key))
+            base?.has(key) == true -> result.put(key, base.get(key))
+        }
+    }
+    return result
 }
