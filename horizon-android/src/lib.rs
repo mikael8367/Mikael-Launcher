@@ -273,7 +273,7 @@ mod android_surface {
 }
 
 #[cfg(target_os = "android")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub fn android_main(app: winit::platform::android::activity::AndroidApp) {
     android_surface::run(app);
 }
