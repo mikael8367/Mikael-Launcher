@@ -12,7 +12,7 @@ A interface inclui navegação entre as áreas principais, seleção visual de m
 ## Interface
 - Android nativo com Kotlin e Jetpack Compose.
 - Orientação principal em paisagem.
-- Menu lateral recolhível com Início, Jogar, Versões, Contas, Mods, Pacotes de recursos, Shaders, Mundos, Downloads, Desempenho, Logs e Configurações.
+- Menu lateral recolhível com Início, Jogar, Horizon Rust, Versões, Contas, Mods, Pacotes de recursos, Shaders, Mundos, Downloads, Desempenho, Logs e Configurações.
 - Tema escuro com verde principal e detalhes azul, roxo e amarelo.
 - Transições entre seções.
 - Controles com estados e respostas locais.
@@ -55,7 +55,7 @@ O APK de depuração será produzido em `app/build/outputs/apk/debug/`. Nenhum A
 - Área de contas com opções visuais Microsoft, Offline e Ely.by.
 - Cadastro local Offline com validação de nome (1–16 caracteres, letras, números e sublinhado).
 - Seleção e remoção de perfis locais; o perfil escolhido é refletido no menu superior.
-- Minecraft Java e Horizon Rust continuam apresentados como motores separados.
+- Minecraft Java e Horizon Rust continuam apresentados como motores separados. A seção Horizon Rust possui tela própria de apresentação; o pacote e o instalador real ainda não estão disponíveis.
 
 **Limites desta etapa:** o avatar ainda é ilustrativo e não baixa a skin real; Microsoft e Ely.by ainda não autenticam; perfis locais são estado de interface, não tokens de sessão oficiais. A integração segura de OAuth, consulta de skin e persistência definitiva será feita na etapa de lógica.
 
