@@ -43,8 +43,7 @@ class JavaEngineAvailability(
                 EngineCapability.VERSION_INSTALLATION,
                 EngineCapability.RUNTIME_MANAGEMENT,
                 EngineCapability.MOD_LOADER_INSTALLATION,
-                EngineCapability.GAME_LAUNCH,
-                EngineCapability.LOG_STREAMING
+                EngineCapability.GAME_LAUNCH
             )
         )
     }
