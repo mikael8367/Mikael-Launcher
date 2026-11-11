@@ -66,6 +66,20 @@ object JavaRuntimeInspector {
         if (!java.isFile) {
             return invalid("java_executable_missing", "O executável bin/java não foi encontrado.")
         }
+        if (!java.canExecute()) {
+            return invalid("java_not_executable", "O arquivo bin/java não possui permissão de execução.")
+        }
+        val javaElf = readElfTarget(java) ?: return invalid(
+            "invalid_java_elf",
+            "O executável bin/java não possui um cabeçalho ELF válido."
+        )
+        if (javaElf.elfClass != target.elfClass || javaElf.machine != target.machine) {
+            return invalid(
+                "java_abi_mismatch",
+                "O executável bin/java não corresponde à arquitetura $expectedAbi do dispositivo."
+            )
+        }
+
         val jvm = File(root, "lib/server/libjvm.so")
         if (!jvm.isFile) {
             return invalid("jvm_library_missing", "A biblioteca lib/server/libjvm.so não foi encontrada.")
@@ -78,7 +92,7 @@ object JavaRuntimeInspector {
         if (elf.elfClass != target.elfClass || elf.machine != target.machine) {
             return invalid(
                 "runtime_abi_mismatch",
-                "O runtime não corresponde à arquitetura $expectedAbi do dispositivo."
+                "A biblioteca libjvm.so não corresponde à arquitetura $expectedAbi do dispositivo."
             )
         }
 
