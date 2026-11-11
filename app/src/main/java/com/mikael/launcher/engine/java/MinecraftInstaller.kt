@@ -106,23 +106,17 @@ class MinecraftInstaller(
                 error("O índice de assets está corrompido (SHA-1 inválido).")
             }
             writeAtomically(indexFile, indexText.toByteArray(Charsets.UTF_8))
-            val objects = JSONObject(indexText).optJSONObject("objects")
-            if (objects != null) {
-                val keys = objects.keys()
-                while (keys.hasNext()) {
-                    val key = keys.next()
-                    val obj = objects.optJSONObject(key) ?: continue
-                    val hash = obj.optString("hash")
-                    if (!hash.matches(Regex("[a-fA-F0-9]{40}"))) continue
-                    val prefix = hash.substring(0, 2).lowercase()
-                    tasks += DownloadTask(
-                        "https://resources.download.minecraft.net/$prefix/$hash",
-                        safeResolve(root, "assets/objects/$prefix/$hash"),
-                        hash.lowercase(),
-                        obj.optLong("size").takeIf { it > 0L },
-                        "asset $key"
-                    )
-                }
+            val assetIndex = JSONObject(indexText)
+            val assetEntries = minecraftAssetEntries(assetIndex)
+            for (asset in assetEntries) {
+                val prefix = asset.hash.substring(0, 2).lowercase()
+                tasks += DownloadTask(
+                    "https://resources.download.minecraft.net/$prefix/${asset.hash.lowercase()}",
+                    safeResolve(root, "assets/objects/$prefix/${asset.hash.lowercase()}"),
+                    asset.hash.lowercase(),
+                    asset.size,
+                    "asset ${asset.name}"
+                )
             }
         }
 
@@ -170,6 +164,42 @@ class MinecraftInstaller(
                     }
                 }
             }.awaitAll()
+        }
+
+        // Legacy clients read assets by logical path rather than hash. Materialize
+        // the virtual legacy tree (and the older resources tree when requested).
+        val assetIndexForAliases = assetIndexInfo?.let {
+            val indexId = it.optString("id").ifBlank { versionId }
+            val indexFile = safeResolve(root, "assets/indexes/$indexId.json")
+            if (indexFile.isFile) JSONObject(indexFile.readText(Charsets.UTF_8)) else null
+        }
+        if (assetIndexForAliases != null) {
+            val entries = minecraftAssetEntries(assetIndexForAliases)
+            val virtualLegacy = assetIndexForAliases.optBoolean("virtual", false)
+            val mapToResources = assetIndexForAliases.optBoolean("map_to_resources", false)
+            if (virtualLegacy || mapToResources) {
+                for (asset in entries) {
+                    val source = safeResolve(
+                        root,
+                        "assets/objects/${asset.hash.substring(0, 2).lowercase()}/${asset.hash.lowercase()}"
+                    )
+                    if (!source.isFile) error("Asset ausente após download: ${asset.name}")
+                    if (virtualLegacy) {
+                        val target = safeResolve(root, "assets/virtual/legacy/${asset.name}")
+                        if (!target.isFile || target.length() != source.length()) {
+                            target.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("Falha ao criar pasta de assets legados.") }
+                            source.copyTo(target, overwrite = true)
+                        }
+                    }
+                    if (mapToResources) {
+                        val target = safeResolve(root, "assets/resources/${asset.name}")
+                        if (!target.isFile || target.length() != source.length()) {
+                            target.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("Falha ao criar pasta de resources legados.") }
+                            source.copyTo(target, overwrite = true)
+                        }
+                    }
+                }
+            }
         }
 
         MinecraftInstallResult(versionId, versionRoot, completed.get())
@@ -419,4 +449,42 @@ internal fun minecraftLibraryArtifact(library: JSONObject): JSONObject? {
         .put("path", path)
         .put("sha1", artifact?.optString("sha1").orEmpty())
         .put("size", artifact?.optLong("size", -1L) ?: -1L)
+}
+
+
+internal data class MinecraftAssetEntry(
+    val name: String,
+    val hash: String,
+    val size: Long
+)
+
+/**
+ * Validates the asset index instead of silently skipping malformed records.
+ * Legacy virtual/resource aliases are materialized after their hash objects exist.
+ */
+internal fun minecraftAssetEntries(index: JSONObject): List<MinecraftAssetEntry> {
+    val objects = index.optJSONObject("objects")
+        ?: error("Índice de assets incompatível: campo objects ausente.")
+    val entries = mutableListOf<MinecraftAssetEntry>()
+    val keys = objects.keys()
+    while (keys.hasNext()) {
+        val name = keys.next()
+        require(name.isNotBlank() && !name.startsWith('/') && !name.contains('\\\\')) {
+            "Nome de asset inválido: $name"
+        }
+        val segments = name.split('/')
+        require(segments.all { it.isNotBlank() && it != "." && it != ".." }) {
+            "Caminho de asset inseguro: $name"
+        }
+        val value = objects.optJSONObject(name)
+            ?: error("Registro de asset inválido: $name")
+        val hash = value.optString("hash").lowercase()
+        require(hash.matches(Regex("[a-f0-9]{40}"))) {
+            "Hash SHA-1 inválido no asset: $name"
+        }
+        val size = value.optLong("size", -1L)
+        require(size >= 0L) { "Tamanho inválido no asset: $name" }
+        entries += MinecraftAssetEntry(name, hash, size)
+    }
+    return entries
 }
