@@ -69,9 +69,8 @@ class MinecraftInstaller(
         val versionRoot = safeResolve(root, "versions/$versionId")
         val versionJson = safeResolve(root, "versions/$versionId/$versionId.json")
         val tasks = mutableListOf<DownloadTask>()
-        val downloads = metadata.optJSONObject("downloads")
-        val client = downloads?.optJSONObject("client")
-            ?: error("Esta versão não fornece um arquivo client oficial para instalação automática.")
+        val client = minecraftClientDownload(metadata)
+            ?: error("Esta versão não fornece um arquivo client oficial em um formato reconhecido (downloads.client ou mainJar.downloads.artifact).")
 
         tasks += DownloadTask(
             client.getString("url"),
@@ -394,3 +393,14 @@ internal fun minecraftMavenPath(coordinate: String): String {
     require(extension.matches(Regex("[A-Za-z0-9]+"))) { "Extensão Maven inválida." }
     return "$groupPath/$artifact/$version/$artifact-$version$classifier.$extension"
 }
+
+
+/**
+ * Mojang's modern metadata uses downloads.client. Older version metadata (including
+ * 1.12.2-era manifests) can expose the same client artifact under mainJar.downloads.artifact.
+ */
+internal fun minecraftClientDownload(metadata: JSONObject): JSONObject? =
+    metadata.optJSONObject("downloads")?.optJSONObject("client")
+        ?: metadata.optJSONObject("mainJar")
+            ?.optJSONObject("downloads")
+            ?.optJSONObject("artifact")
