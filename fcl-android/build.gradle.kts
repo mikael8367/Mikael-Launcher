@@ -15,6 +15,7 @@ abstract class FilterFclArm64JreAssets : Sync() {
 }
 
 val filterFclArm64JreAssets = tasks.register<FilterFclArm64JreAssets>("filterFclArm64JreAssets") {
+    outputDir.set(layout.buildDirectory.dir("generated/fclArm64JreAssets"))
     inputs.property("targetAbi", "arm64-v8a")
     from(rootProject.layout.projectDirectory.dir(
         "third_party/FoldCraftLauncher/FCL/src/main/jreAssets"
