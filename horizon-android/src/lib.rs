@@ -49,7 +49,7 @@ fn destroy_session(handle: i64) -> bool {
         .unwrap_or(false)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBridge_nativeGetStatus(
     mut env: JNIEnv,
     _class: JClass,
@@ -64,7 +64,7 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
         .unwrap_or(std::ptr::null_mut())
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBridge_nativeGetCapabilities(
     mut env: JNIEnv,
     _class: JClass,
@@ -76,7 +76,7 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
         .unwrap_or(std::ptr::null_mut())
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBridge_nativeCreateSession(
     _env: JNIEnv,
     _class: JClass,
@@ -86,7 +86,7 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
     create_session(width, height) as jlong
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBridge_nativeDestroySession(
     _env: JNIEnv,
     _class: JClass,
