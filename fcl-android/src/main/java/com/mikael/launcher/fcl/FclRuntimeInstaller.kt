@@ -152,7 +152,9 @@ object FclRuntimeInstaller {
                 throw IOException("The installed runtime was not accepted by FCL JavaManager.")
             }
 
-            deleteTree(backup)
+            // The new runtime is now committed and registered. Backup cleanup is
+            // best-effort: a storage cleanup error must never delete a valid runtime.
+            runCatching { deleteTree(backup) }
             return FclRuntimeInstallResult(
                 runtime = runtime,
                 installed = true,
