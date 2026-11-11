@@ -107,8 +107,7 @@ fun AccountHeader(
 
 @Composable
 fun MinecraftHead(name: String, modifier: Modifier = Modifier) {
-    val palette = remember(name) {
-        val seed = name.hashCode()
+    val palette = remember {
         listOf(
             Color(0xFFB9784C), Color(0xFF7B4B32), Color(0xFFE0B18B),
             Color(0xFF4B3328), Color(0xFF2B211D)
