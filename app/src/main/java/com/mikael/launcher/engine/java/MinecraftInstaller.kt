@@ -220,28 +220,13 @@ class MinecraftInstaller(
         label
     )
 
-    private fun libraryApplies(library: JSONObject): Boolean {
-        val rules = library.optJSONArray("rules") ?: return true
-        var allowed = false
-        for (i in 0 until rules.length()) {
-            val rule = rules.optJSONObject(i) ?: continue
-            val os = rule.optJSONObject("os")
-            val osName = os?.optString("name")
-            val osMatches = osName.isNullOrBlank() || osName == "linux"
-            val archPattern = os?.optString("arch").orEmpty()
-            val archMatches = archPattern.isBlank() || runCatching {
-                Regex(archPattern).containsMatchIn(System.getProperty("os.arch").orEmpty())
-            }.getOrDefault(false)
-            val features = rule.optJSONObject("features")
-            val featuresMatch = features == null || features.keys().asSequence().all { key ->
-                !features.optBoolean(key, false)
-            }
-            if (osMatches && archMatches && featuresMatch) {
-                allowed = rule.optString("action") == "allow"
-            }
-        }
-        return allowed
-    }
+    private fun libraryApplies(library: JSONObject): Boolean =
+        minecraftLibraryApplies(
+            library = library,
+            osName = "linux",
+            osArch = System.getProperty("os.arch").orEmpty(),
+            osVersion = System.getProperty("os.version").orEmpty()
+        )
 
     private fun mavenPath(coordinate: String): String = minecraftMavenPath(coordinate)
 
@@ -404,3 +389,44 @@ internal fun minecraftClientDownload(metadata: JSONObject): JSONObject? =
         ?: metadata.optJSONObject("mainJar")
             ?.optJSONObject("downloads")
             ?.optJSONObject("artifact")
+
+
+/**
+ * Evaluates Mojang's ordered library rules. Android uses Linux-compatible Maven
+ * metadata for dependency selection; native binaries still require a separate
+ * Android ABI adapter before they can be loaded.
+ */
+internal fun minecraftLibraryApplies(
+    library: JSONObject,
+    osName: String,
+    osArch: String,
+    osVersion: String,
+    features: Map<String, Boolean> = emptyMap()
+): Boolean {
+    val rules = library.optJSONArray("rules") ?: return true
+    var allowed = false
+    for (index in 0 until rules.length()) {
+        val rule = rules.optJSONObject(index) ?: continue
+        val os = rule.optJSONObject("os")
+        val nameMatches = os?.optString("name").isNullOrNullOrEmpty() ||
+            os?.optString("name") == osName
+        val archPattern = os?.optString("arch").orEmpty()
+        val archMatches = archPattern.isBlank() || runCatching {
+            Regex(archPattern).containsMatchIn(osArch)
+        }.getOrDefault(false)
+        val versionPattern = os?.optString("version").orEmpty()
+        val versionMatches = versionPattern.isBlank() || runCatching {
+            Regex(versionPattern).containsMatchIn(osVersion)
+        }.getOrDefault(false)
+        val requiredFeatures = rule.optJSONObject("features")
+        val featuresMatch = requiredFeatures == null || requiredFeatures.keys().asSequence().all { key ->
+            (features[key] ?: false) == requiredFeatures.optBoolean(key, false)
+        }
+        if (nameMatches && archMatches && versionMatches && featuresMatch) {
+            allowed = rule.optString("action") == "allow"
+        }
+    }
+    return allowed
+}
+
+private fun String?.isNullOrNullOrEmpty(): Boolean = this.isNullOrEmpty()
