@@ -177,6 +177,7 @@ class MinecraftInstaller(
             val mapToResources = assetIndexForAliases.optBoolean("map_to_resources", false)
             if (virtualLegacy || mapToResources) {
                 for (asset in entries) {
+                    if (!minecraftAssetRequiredOnAndroid(asset.name)) continue
                     val source = safeResolve(
                         root,
                         "assets/objects/${asset.hash.substring(0, 2).lowercase()}/${asset.hash.lowercase()}"
