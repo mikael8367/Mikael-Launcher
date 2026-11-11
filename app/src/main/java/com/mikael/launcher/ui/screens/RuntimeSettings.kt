@@ -50,7 +50,7 @@ internal const val PREF_JVM_ARGS = "selected_jvm_arguments"
 internal const val PREF_GAME_TREE_URI = "minecraft_game_tree_uri"
 
 val JAVA_RUNTIMES = listOf("Java 8", "Java 17", "Java 21", "Java 25")
-val RENDERER_BACKENDS = listOf("GL4ES", "Zink", "VirGL")
+val RENDERER_BACKENDS = listOf("GL4ES", "Zink", "VGPU")
 
 /** Parses "Java 17" into 17. Returns null instead of crashing on corrupted preferences. */
 internal fun runtimeMajorFromLabel(label: String): Int? =
