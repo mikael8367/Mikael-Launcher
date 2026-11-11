@@ -71,6 +71,7 @@ object FclEngineBootstrap {
                 // FCLPath contains static paths used by ConfigHolder and other FCL
                 // classes. It must be initialized before those classes are touched.
                 FCLPath.loadPaths(appContext)
+                val defaultPrivateGameDirectory = File(FCLPath.PRIVATE_COMMON_DIR).canonicalFile
 
                 // The selected SAF directory is resolved to a real local filesystem
                 // path because FCL's game repository and Minecraft process use java.io.File.
@@ -131,12 +132,11 @@ object FclEngineBootstrap {
                 }
 
                 // A brand-new FCL profile defaults to shared external storage.
-                // Choose its app-private profile once, so first launch does not
-                // require broad external-storage access. Existing user selection
-                // is preserved on every later start.
+                // Route a newly-created profile to the selected game directory. Existing
+                // profile data is not deleted when the directory changes.
                 if (ConfigHolder.isNewlyCreated()) {
                     val privateDir = runCatching {
-                        File(FCLPath.PRIVATE_COMMON_DIR).canonicalFile
+                        selectedGameDirectory
                     }.getOrNull()
                     val privateProfile = privateDir?.let { target ->
                         Profiles.profiles.firstOrNull { profile ->
@@ -159,7 +159,7 @@ object FclEngineBootstrap {
                 val privateGameDirectory = selectedProfile?.let { profile ->
                     runCatching {
                         profile.gameDir.canonicalFile ==
-                            File(FCLPath.PRIVATE_COMMON_DIR).canonicalFile
+                            defaultPrivateGameDirectory
                     }.getOrDefault(false)
                 } ?: false
 
