@@ -27,7 +27,7 @@ class FclLaunchPreferencesTest {
         assertNull(rendererIdForLabel("ANGLE"))
         assertNull(rendererIdForLabel("Vulkan experimental"))
         assertNull(rendererIdForLabel("Software"))
-        assertNull(rendererIdForLabel("VirGL"))
+        assertEquals(Renderer.ID_VGPU, rendererIdForLabel("VirGL"))
         assertEquals(Renderer.ID_GL4ES, rendererIdForLabel("gl4es"))
     }
 
