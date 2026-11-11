@@ -1,0 +1,12 @@
+[package]
+name = "horizon-android"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "horizon_android"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+jni = "0.21.1"
