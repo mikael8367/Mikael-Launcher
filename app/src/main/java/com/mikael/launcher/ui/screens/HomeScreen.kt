@@ -144,7 +144,7 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
                         val appPrefs = context.getSharedPreferences(VERSION_PREFS, Context.MODE_PRIVATE)
                         val launchPreferences = FclLaunchPreferences(
                             runtimeFolder = runtimeFolderForLabel(appPrefs.getString(PREF_RUNTIME, null)),
-                            rendererLabel = appPrefs.getString(PREF_RENDERER, null),
+                            rendererLabel = appPrefs.getString(PREF_RENDERER, "GL4ES"),
                             memoryMB = parseMemoryMB(appPrefs.getString(PREF_RAM, null)),
                             autoMemory = appPrefs.getBoolean("perf_auto_ram", true),
                             javaArgs = appPrefs.getString(PREF_JVM_ARGS, null)
