@@ -104,6 +104,11 @@ class MinecraftInstaller(
             val assetIndex = JSONObject(indexText)
             val assetEntries = minecraftAssetEntries(assetIndex)
             for (asset in assetEntries) {
+                // These are desktop window decoration images. Android renders into
+                // its own Surface and never calls Minecraft's desktop setWindowIcon().
+                // Some legacy Mojang indexes reference icon objects that now return
+                // 404; omitting only these optional images does not affect gameplay.
+                if (!minecraftAssetRequiredOnAndroid(asset.name)) continue
                 val prefix = asset.hash.substring(0, 2).lowercase()
                 tasks += DownloadTask(
                     "https://resources.download.minecraft.net/$prefix/${asset.hash.lowercase()}",
@@ -367,6 +372,10 @@ class MinecraftInstaller(
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 }
+
+/** Desktop-only window icons are not required by the Android Surface renderer. */
+internal fun minecraftAssetRequiredOnAndroid(name: String): Boolean =
+    name != "icons/icon_16x16.png" && name != "icons/icon_32x32.png"
 
 internal fun minecraftMavenPath(coordinate: String): String {
     val normalized = coordinate.substringBefore('@')
