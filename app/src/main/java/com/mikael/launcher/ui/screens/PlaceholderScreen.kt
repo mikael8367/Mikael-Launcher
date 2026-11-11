@@ -426,6 +426,8 @@ private fun VersionsScreen() {
     LaunchedEffect(MinecraftInstallSession.finishedProfileId) {
         val finished = MinecraftInstallSession.finishedProfileId ?: return@LaunchedEffect
         installedVersion = finished
+        profiles = (profiles + finished).distinct()
+        selectedProfile = finished
         showInfo = true
         MinecraftInstallSession.consumeResult()
     }
