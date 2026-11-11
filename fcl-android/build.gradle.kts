@@ -5,6 +5,24 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+/**
+ * Keep only ARM64 JRE archives. Packaging all ABIs would waste significant
+ * APK storage on a launcher whose first supported device target is arm64-v8a.
+ */
+abstract class FilterFclArm64JreAssets : Sync() {
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+}
+
+val filterFclArm64JreAssets = tasks.register<FilterFclArm64JreAssets>("filterFclArm64JreAssets") {
+    inputs.property("targetAbi", "arm64-v8a")
+    from(rootProject.layout.projectDirectory.dir(
+        "third_party/FoldCraftLauncher/FCL/src/main/jreAssets"
+    ))
+    into(outputDir)
+    exclude { it.name.startsWith("bin-") && it.name != "bin-arm64.tar.xz" }
+}
+
 android {
     namespace = "com.tungsten.fcl"
     compileSdk = 35
@@ -46,8 +64,8 @@ android {
         assets.srcDir(upstream.resolve("assets"))
         jniLibs.srcDir(upstream.resolve("jniLibs"))
         manifest.srcFile(upstream.resolve("AndroidManifest.xml"))
-        // jreAssets intentionally are not bundled here. The four upstream runtimes
-        // are large; runtime acquisition must be implemented as an on-demand step.
+        // JRE archives are added below through an ABI-filtered generated asset source.
+
     }
 
     packaging {
@@ -68,6 +86,34 @@ android {
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(filterFclArm64JreAssets) {
+            it.outputDir
+        }
+    }
+}
+
+tasks.register("verifyFclArm64JreAssets") {
+    dependsOn(filterFclArm64JreAssets)
+    doLast {
+        val root = filterFclArm64JreAssets.get().outputDir.get().asFile
+        val requiredVersions = listOf("jre8", "jre17", "jre21", "jre25")
+        requiredVersions.forEach { version ->
+            val runtime = root.resolve("app_runtime/java/$version")
+            check(runtime.resolve("universal.tar.xz").isFile && runtime.resolve("universal.tar.xz").length() > 0L) {
+                "Missing universal archive for $version"
+            }
+            check(runtime.resolve("bin-arm64.tar.xz").isFile && runtime.resolve("bin-arm64.tar.xz").length() > 0L) {
+                "Missing ARM64 archive for $version"
+            }
+            check(runtime.listFiles().orEmpty().none { it.name.startsWith("bin-") && it.name != "bin-arm64.tar.xz" }) {
+                "Non-ARM64 archive leaked into $version"
+            }
+        }
     }
 }
 
