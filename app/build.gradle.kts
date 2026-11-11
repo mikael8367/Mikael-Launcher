@@ -48,6 +48,9 @@ kotlin {
             // FCL ships bytehook in its native source set and CMake also imports the AAR copy.
             // Keep one ARM64 copy when the app merges native libraries.
             pickFirsts += "lib/arm64-v8a/libbytehook.so"
+            // FCL native sources and the Kopper Zink renderer AAR both package
+            // glxshim for ARM64. Keep the copy from the FCL native source set.
+            pickFirsts += "lib/arm64-v8a/libglxshim.so"
         }
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
