@@ -21,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -30,6 +31,8 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
+import kotlinx.coroutines.launch
+import com.mikael.launcher.fcl.FclEngineBootstrap
 import com.mikael.launcher.ui.theme.PrimaryGreen
 import com.mikael.launcher.ui.theme.TextPrimary
 import com.mikael.launcher.ui.theme.TextSecondary
@@ -39,11 +42,31 @@ internal fun GameStorageLocationPanel() {
     val context = LocalContext.current
     val lifecycleOwner = context as? LifecycleOwner
     val prefs = remember { context.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE) }
+    val scope = rememberCoroutineScope()
     var selectedUri by remember { mutableStateOf(prefs.getString(PREF_GAME_TREE_URI, null)) }
     var folderName by remember { mutableStateOf("Armazenamento interno do aplicativo") }
     var status by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<String>>(emptyList()) }
     var hasFileAccess by remember { mutableStateOf(checkFileAccess(context)) }
+    var applyingFolder by remember { mutableStateOf(false) }
+
+    fun applyFclDirectory() {
+        if (selectedUri != null && !checkFileAccess(context)) {
+            status = "Pasta salva. Conceda acesso aos arquivos para conectá-la ao FCL."
+            return
+        }
+        applyingFolder = true
+        scope.launch {
+            try {
+                val updated = FclEngineBootstrap.updateGameDirectory(context)
+                status = if (updated) "Pasta aplicada ao FCL e aos próximos downloads." else "Pasta salva; será aplicada quando o FCL inicializar."
+            } catch (error: Exception) {
+                status = error.message ?: "Não foi possível aplicar a pasta ao FCL."
+            } finally {
+                applyingFolder = false
+            }
+        }
+    }
 
     fun refresh(uriString: String?) {
         val folders = listOf("versions", "libraries", "assets", "mods", "resourcepacks", "shaderpacks", "saves")
@@ -82,6 +105,7 @@ internal fun GameStorageLocationPanel() {
                 selectedUri = uri.toString()
                 prefs.edit().putString(PREF_GAME_TREE_URI, uri.toString()).apply()
                 refresh(uri.toString())
+                applyFclDirectory()
             } catch (error: Exception) {
                 status = "Falha ao salvar permissão da pasta: ${error.message}"
             }
@@ -109,7 +133,10 @@ internal fun GameStorageLocationPanel() {
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) hasFileAccess = checkFileAccess(context)
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasFileAccess = checkFileAccess(context)
+                if (hasFileAccess && selectedUri != null) applyFclDirectory()
+            }
         }
         lifecycleOwner?.lifecycle?.addObserver(observer)
         onDispose { lifecycleOwner?.lifecycle?.removeObserver(observer) }
@@ -122,13 +149,14 @@ internal fun GameStorageLocationPanel() {
         Text(if (hasFileAccess) "Acesso amplo aos arquivos: permitido" else "Acesso amplo aos arquivos: não concedido", color = if (hasFileAccess) PrimaryGreen else TextSecondary, fontSize = 10.sp)
         OutlinedButton(onClick = { requestFileAccess() }) { Text(if (hasFileAccess) "Gerenciar permissão de arquivos" else "Permitir acesso aos arquivos") }
         Text("No Android 11 ou superior, o Android abre a tela especial de acesso a todos os arquivos. No Android 8 a 10, aparece a solicitação de leitura e gravação. A permissão é opcional quando você usa apenas a pasta escolhida pelo seletor.", color = TextSecondary, fontSize = 10.sp)
-        Text(status, color = TextSecondary, fontSize = 10.sp)
+        Text(if (applyingFolder) "Aplicando pasta ao FCL..." else status, color = TextSecondary, fontSize = 10.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedButton(onClick = { folderPicker.launch(null) }) { Text("Escolher pasta") }
             OutlinedButton(onClick = {
                 selectedUri = null
                 prefs.edit().remove(PREF_GAME_TREE_URI).apply()
                 refresh(null)
+                applyFclDirectory()
             }) { Text("Usar padrão") }
         }
         Text("Conteúdo reconhecido", color = TextPrimary, fontSize = 11.sp)
