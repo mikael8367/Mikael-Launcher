@@ -1,6 +1,8 @@
 package com.mikael.launcher.ui.screens
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,6 +31,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mikael.launcher.fcl.FclEngineBootstrap
+import com.mikael.launcher.fcl.FclJavaRuntime
+import com.mikael.launcher.fcl.FclRuntimeInstaller
+import kotlinx.coroutines.launch
 import com.mikael.launcher.ui.theme.OutlineSoft
 import com.mikael.launcher.ui.theme.PrimaryGreen
 import com.mikael.launcher.ui.theme.Surface as PanelSurface
@@ -53,6 +60,19 @@ fun RuntimeSettingsPanel() {
     var javaArgs by remember { mutableStateOf(prefs.getString(PREF_JVM_ARGS, "-Xms512M -Xmx2G") ?: "-Xms512M -Xmx2G") }
     var ramLimit by remember { mutableStateOf(prefs.getString(PREF_RAM, "2048 MB") ?: "2048 MB") }
     var installNotice by remember { mutableStateOf(false) }
+    var installing by remember { mutableStateOf(false) }
+    var installDetail by remember { mutableStateOf("Verificando backend FCL...") }
+    var installedRuntimes by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+
+    LaunchedEffect(context) {
+        val bootstrap = FclEngineBootstrap.initialize(context.applicationContext)
+        installDetail = bootstrap.message
+        if (bootstrap.initialized) {
+            installedRuntimes = FclRuntimeInstaller.installedRuntimes().toSet()
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Text("RUNTIME JAVA", color = PrimaryGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -90,16 +110,42 @@ fun RuntimeSettingsPanel() {
             label = { Text("Argumentos JVM") },
             minLines = 2
         )
-        Button(onClick = { installNotice = true }) { Text("Instalar / gerenciar runtime selecionada") }
-        Text("A seleção fica salva neste aparelho. Os pacotes de runtime e os renderizadores ainda precisam ser integrados e validados para cada GPU/Android.", color = TextSecondary, fontSize = 10.sp)
-    }
-    if (installNotice) {
-        AlertDialog(
-            onDismissRequest = { installNotice = false },
-            title = { Text("Gerenciador de runtime") },
-            text = { Text("$runtime foi selecionada. O download, a verificação de integridade e a instalação do pacote serão conectados na etapa de integração.") },
-            confirmButton = { TextButton(onClick = { installNotice = false }) { Text("Entendi") } }
+        val runtimeFolder = when (runtime) {
+            "Java 8" -> "jre8"
+            "Java 17" -> "jre17"
+            "Java 21" -> "jre21"
+            else -> "jre25"
+        }
+        Text(
+            if (runtimeFolder in installedRuntimes) "$runtime instalado" else "$runtime ainda não instalado",
+            color = if (runtimeFolder in installedRuntimes) PrimaryGreen else TextSecondary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
         )
+        Button(
+            enabled = !installing,
+            onClick = {
+                installing = true
+                installDetail = "Iniciando instalação de $runtime..."
+                scope.launch {
+                    try {
+                        val major = runtime.substringAfter("Java ").toInt()
+                        val target = FclJavaRuntime.values().first { it.majorVersion == major }
+                        val result = FclRuntimeInstaller.install(context.applicationContext, target) { progress ->
+                            mainHandler.post { installDetail = progress.detail }
+                        }
+                        installedRuntimes = FclRuntimeInstaller.installedRuntimes().toSet()
+                        installDetail = result.message
+                    } catch (error: Throwable) {
+                        installDetail = "Falha: ${error.message ?: error.javaClass.simpleName}"
+                    } finally {
+                        installing = false
+                    }
+                }
+            }
+        ) { Text(if (installing) "Instalando..." else "Instalar $runtime") }
+        Text(installDetail, color = TextSecondary, fontSize = 10.sp)
+        Text("Os runtimes são instalados no armazenamento privado do aplicativo e validados quanto à versão e arquitetura ARM64.", color = TextSecondary, fontSize = 10.sp)
     }
 }
 
