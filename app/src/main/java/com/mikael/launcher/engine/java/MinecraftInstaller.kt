@@ -328,8 +328,13 @@ class MinecraftInstaller(
                 currentUrl = URL(currentUrl, location)
             } else {
                 if (status !in 200..299) {
+                    val failedUrl = currentUrl.toString()
+                    val statusMessage = runCatching { connection.responseMessage }.getOrNull()
                     connection.disconnect()
-                    error("Falha HTTP $status ao baixar conteúdo oficial.")
+                    error(
+                        "Falha HTTP $status${statusMessage?.let { " ($it)" }.orEmpty()} " +
+                            "ao baixar conteúdo oficial. URL: $failedUrl"
+                    )
                 }
                 return connection
             }
