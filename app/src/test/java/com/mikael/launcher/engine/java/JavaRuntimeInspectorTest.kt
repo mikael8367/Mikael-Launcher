@@ -64,7 +64,7 @@ class JavaRuntimeInspectorTest {
     fun missingJvmLibraryIsRejected() {
         val root = createRuntime("21.0.4", elfClass = 2, machine = 183)
         try {
-            File(root, "lib/server/libjvm.so").delete()
+            File(root, "lib/aarch64/server/libjvm.so").delete()
             val result = JavaRuntimeInspector.inspect(root, "arm64-v8a")
             assertTrue(result is JavaRuntimeInspection.Invalid)
             assertEquals("jvm_library_missing", (result as JavaRuntimeInspection.Invalid).reasonCode)
