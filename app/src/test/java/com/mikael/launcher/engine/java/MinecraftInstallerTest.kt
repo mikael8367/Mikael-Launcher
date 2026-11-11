@@ -128,6 +128,14 @@ class MinecraftInstallerTest {
     }
 
     @Test
+    fun skipsClassifierOnlyLibrariesWithoutInventingMainJar() {
+        val library = JSONObject(
+            """{"name":"net.java.jinput:jinput-platform:2.0.5","downloads":{"classifiers":{"natives-linux":{"path":"net/java/jinput/jinput-platform/2.0.5/jinput-platform-2.0.5-natives-linux.jar","url":"https://libraries.minecraft.net/net/java/jinput/jinput-platform/2.0.5/jinput-platform-2.0.5-natives-linux.jar"}}}}"""
+        )
+        assertNull(minecraftLibraryArtifact(library))
+    }
+
+    @Test
     fun resolvesLibraryFromItsDeclaredMavenRepository() {
         val library = JSONObject(
             """{"name":"org.example:custom:2.0@zip","url":"https://repo.example/maven/"}"""
