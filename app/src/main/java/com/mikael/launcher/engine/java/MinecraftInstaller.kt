@@ -30,11 +30,10 @@ data class MinecraftInstallResult(
 
 /**
  * Downloads official Mojang version metadata, client, applicable Maven libraries,
- * native classifier archives, asset index/objects and client logging configuration.
+ * asset index/objects (including legacy aliases) and client logging configuration.
  *
- * Files are kept inside the app-private game directory. Native archives are stored
- * but deliberately not extracted/advertised as Android-compatible until the FCL
- * ARM64 native adapter is wired and verified.
+ * Files are kept inside the app-private game directory. Desktop native classifiers
+ * are skipped; FCL must supply Android-compatible native libraries.
  */
 class MinecraftInstaller(
     private val gameDirectory: File,
@@ -470,7 +469,7 @@ internal fun minecraftAssetEntries(index: JSONObject): List<MinecraftAssetEntry>
     val keys = objects.keys()
     while (keys.hasNext()) {
         val name = keys.next()
-        require(name.isNotBlank() && !name.startsWith('/') && !name.contains('\\\\')) {
+        require(name.isNotBlank() && !name.startsWith('/') && !name.contains('\\')) {
             "Nome de asset inválido: $name"
         }
         val segments = name.split('/')
