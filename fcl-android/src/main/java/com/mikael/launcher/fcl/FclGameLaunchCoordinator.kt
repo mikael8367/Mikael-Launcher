@@ -56,16 +56,8 @@ object FclGameLaunchCoordinator {
     /** Pasta onde o FCL grava launcher.log e minecraft.log (para diagnóstico). */
     fun currentLogDirectory(): String? = runCatching { FCLPath.LOG_DIR }.getOrNull()
 
-    suspend fun installedVersionIds(context: Context): List<String> {
-        val appContext = context.applicationContext
-        val bootstrap = FclEngineBootstrap.initialize(appContext)
-        check(bootstrap.initialized) { bootstrap.message }
-        val profile = withContext(Dispatchers.IO) { Profiles.getSelectedProfile() }
-        return withContext(Dispatchers.IO) {
-            profile.repository.refreshVersions()
-            profile.repository.versions.map { it.id }.distinct().sorted()
-        }
-    }
+    suspend fun installedVersionIds(context: Context): List<String> =
+        FclEngineBootstrap.installedVersionIds(context.applicationContext)
 
     suspend fun launch(
         context: Context,
