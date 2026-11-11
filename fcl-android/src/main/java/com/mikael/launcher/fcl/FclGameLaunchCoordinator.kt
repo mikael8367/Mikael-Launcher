@@ -175,7 +175,7 @@ object FclGameLaunchCoordinator {
                 repository.getLaunchOptions(versionId, javaVersion, profile.gameDir, 1.0, 0.0)
             }
             val launcher = FCLGameLauncher(
-                context,
+                activity,
                 repository,
                 version,
                 authInfo,
@@ -225,7 +225,7 @@ object FclGameLaunchCoordinator {
                 bridge.renderer = launchOptions.renderer.name
                 JVMActivity.setFCLBridge(bridge, MenuType.GAME)
 
-                val intent = Intent(context, JVMActivity::class.java).apply {
+                val intent = Intent(activity, JVMActivity::class.java).apply {
                     putExtra("controller", setting.controller)
                     putExtra("TERRACOTTA_PLAYER", username)
                 }
