@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material3.AlertDialog
@@ -27,12 +28,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.mikael.launcher.fcl.FclGameLaunchCoordinator
+import com.mikael.launcher.fcl.buildLaunchDiagnostic
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,6 +86,8 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
     var showVersionPicker by remember { mutableStateOf(false) }
     var isLaunching by remember { mutableStateOf(false) }
     var launchDialogMessage by remember { mutableStateOf<String?>(null) }
+    var launchDiagnostic by remember { mutableStateOf<String?>(null) }
+    var diagnosticCopied by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -113,22 +119,33 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
                 when {
                     selectedVersion.isBlank() -> {
                         launchDialogMessage = "Selecione uma versão instalada antes de iniciar."
+                        launchDiagnostic = null
                     }
                     selectedAccount.isBlank() -> {
                         launchDialogMessage = "Selecione ou adicione uma conta offline na aba Contas."
+                        launchDiagnostic = null
                     }
                     hostActivity == null -> {
                         launchDialogMessage = "Não foi possível acessar a tela principal do Android."
+                        launchDiagnostic = null
                     }
                     else -> {
                         isLaunching = true
                         launchDialogMessage = "Preparando a versão, verificando bibliotecas e iniciando o motor Java do FCL..."
+                        launchDiagnostic = null
                         hostActivity.lifecycleScope.launch {
                             try {
                                 FclGameLaunchCoordinator.launch(hostActivity, selectedVersion, selectedAccount)
                                 launchDialogMessage = null
+                            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                throw cancelled
                             } catch (error: Throwable) {
                                 launchDialogMessage = error.message ?: "Falha desconhecida ao iniciar Minecraft."
+                                launchDiagnostic = buildLaunchDiagnostic(
+                                    error = error,
+                                    stage = FclGameLaunchCoordinator.currentStage,
+                                    logDir = FclGameLaunchCoordinator.currentLogDirectory()
+                                )
                             } finally {
                                 isLaunching = false
                             }
@@ -235,6 +252,22 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
                     if (!isLaunching && selectedAccount.isNotBlank()) {
                         Text("Conta selecionada: $selectedAccount", color = TextSecondary)
                     }
+                    if (!isLaunching && launchDiagnostic != null) {
+                        Surface(
+                            color = PanelSurface,
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, OutlineSoft)
+                        ) {
+                            Text(
+                                launchDiagnostic.orEmpty(),
+                                color = TextSecondary,
+                                fontSize = 10.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp)
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -243,7 +276,17 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
                 }
             },
             dismissButton = {
-                if (!isLaunching) {
+                if (!isLaunching && launchDiagnostic != null) {
+                    TextButton(onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        clipboard?.setPrimaryClip(ClipData.newPlainText("mikael-launch-diagnostic", launchDiagnostic))
+                        diagnosticCopied = true
+                    }) {
+                        Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text(if (diagnosticCopied) "Copiado!" else "Copiar diagnóstico")
+                    }
+                } else if (!isLaunching) {
                     TextButton(onClick = {
                         launchDialogMessage = null
                         onNavigate(LauncherSection.VERSIONS)
@@ -373,3 +416,4 @@ private tailrec fun findHostActivity(context: Context): Activity? = when (contex
     is ContextWrapper -> findHostActivity(context.baseContext)
     else -> null
 }
+

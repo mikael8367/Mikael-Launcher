@@ -41,8 +41,16 @@ import kotlin.coroutines.resumeWithException
 object FclGameLaunchCoordinator {
     private val launching = AtomicBoolean(false)
 
+    /** Etapa atual da inicialização, para diagnóstico quando algo falha. */
+    @Volatile
+    var currentStage: String = "aguardando solicitação"
+        private set
+
     fun isValidOfflineUsername(username: String): Boolean =
         username.matches(Regex("[A-Za-z0-9_]{1,16}"))
+
+    /** Pasta onde o FCL grava launcher.log e minecraft.log (para diagnóstico). */
+    fun currentLogDirectory(): String? = runCatching { FCLPath.LOG_DIR }.getOrNull()
 
     suspend fun launch(context: Context, versionId: String, username: String) {
         require(context is Activity) {
@@ -59,14 +67,17 @@ object FclGameLaunchCoordinator {
         }
 
         try {
+            stage("preparando serviços do FCL")
             val appContext = context.applicationContext
             val bootstrap = FclEngineBootstrap.initialize(appContext)
             check(bootstrap.initialized) { bootstrap.message }
 
+            stage("selecionando a versão instalada")
             check(FclEngineBootstrap.refreshAndSelectGameVersion(appContext, versionId)) {
                 "Não foi possível selecionar a versão instalada no perfil FCL."
             }
 
+            stage("resolvendo a versão e as dependências")
             val profile = withContext(Dispatchers.IO) { Profiles.getSelectedProfile() }
             val repository = profile.repository
             val resolvedVersion = withContext(Dispatchers.IO) {
@@ -91,22 +102,23 @@ object FclGameLaunchCoordinator {
             runTask(dependencyManager.checkGameCompletionAsync(version, verifyAbnormalLaunch))
 
             if (gameVersion != null) {
+                stage("verificando arquivos essenciais do jogo")
                 runTask(GameVerificationFixTask(dependencyManager, gameVersion, version))
             }
 
+            stage("preparando bibliotecas internas do FCL")
             // These two FCL-owned patchers are extracted by the upstream launch
             // flow before preparing the JVM. They are required by some legacy
             // and modern launch paths, so materialize them before building classpath.
-            unpackBuiltinJar("/assets/game/MioLibPatcher.jar", FCLPath.LIB_PATCHER_PATH)
-            unpackBuiltinJar("/assets/game/MioLaunchWrapper.jar", FCLPath.MIO_LAUNCH_WRAPPER)
+            unpackBuiltinJar(appContext, "/assets/game/MioLibPatcher.jar", FCLPath.LIB_PATCHER_PATH)
+            unpackBuiltinJar(appContext, "/assets/game/MioLaunchWrapper.jar", FCLPath.MIO_LAUNCH_WRAPPER)
 
+            stage("selecionando o runtime Java compatível")
             val setting = profile.getVersionSetting(versionId)
-            val javaVersion = withContext(Dispatchers.Main) {
-                if (setting.java == "Auto") {
-                    JavaManager.getSuitableJavaVersion(version)
-                } else {
-                    JavaManager.getJavaFromVersionName(setting.java)
-                }
+            val javaVersion = if (setting.java == "Auto") {
+                withContext(Dispatchers.IO) { JavaManager.getSuitableJavaVersion(version) }
+            } else {
+                withContext(Dispatchers.IO) { JavaManager.getJavaFromVersionName(setting.java) }
             }
             check(javaVersion.getVersion() > 0) {
                 "Não existe um runtime Java compatível instalado para esta versão."
@@ -116,6 +128,7 @@ object FclGameLaunchCoordinator {
                 "O runtime " + javaVersion.name + " está incompleto. Reinstale esse runtime nas configurações."
             }
 
+            stage("preparando a conta offline")
             // A tela de contas atual mantém nomes offline locais; autenticação Microsoft
             // precisa ser integrada separadamente antes de oferecer esse tipo de conta.
             val account = Accounts.FACTORY_OFFLINE.create(
@@ -124,6 +137,7 @@ object FclGameLaunchCoordinator {
             )
             val authInfo = withContext(Dispatchers.IO) { account.logIn() }
 
+            stage("montando os argumentos de inicialização")
             val launchOptions = withContext(Dispatchers.IO) {
                 repository.getLaunchOptions(versionId, javaVersion, profile.gameDir, 1.0, 0.0)
             }
@@ -154,6 +168,7 @@ object FclGameLaunchCoordinator {
                 }
             }
             jnaVersion?.let { versionName ->
+                stage("preparando natives do JNA")
                 withContext(Dispatchers.IO) {
                     launcher.setJnaVersion(versionName)
                     JnaNatives.ensureNativeLibrary(context, versionName)
@@ -161,8 +176,10 @@ object FclGameLaunchCoordinator {
             }
             lwjglVersion?.let(launcher::setLwjglVersion)
 
+            stage("iniciando a JVM do Minecraft")
             val bridge = withContext(Dispatchers.IO) { launcher.launch() }
 
+            stage("abrindo a tela do jogo")
             withContext(Dispatchers.Main) {
                 check(!context.isFinishing && !context.isDestroyed) {
                     "A tela do launcher foi encerrada antes de abrir o Minecraft."
@@ -184,25 +201,45 @@ object FclGameLaunchCoordinator {
                 }
                 context.startActivity(intent)
             }
+            stage("jogo em execução")
         } finally {
             launching.set(false)
         }
     }
 
-    private fun unpackBuiltinJar(resourcePath: String, targetPath: String) {
+    private fun stage(description: String) {
+        currentStage = description
+    }
+
+    /**
+     * Extrai um JAR embutido (asset do APK do FCL) para o caminho esperado pelo
+     * motor. Em Android, ClassLoader.getResourceAsStream NÃO lê do diretório
+     * assets/ do APK; os patchers do FCL são assets, então a leitura correta é
+     * via AssetManager. Mantemos o fallback para recurso de classe para cobrir
+     * empacotamentos em que o JAR venha como recurso Java.
+     */
+    private fun unpackBuiltinJar(context: Context, resourcePath: String, targetPath: String) {
         val target = File(targetPath)
         val parent = target.parentFile
             ?: throw IllegalStateException("Caminho inválido para biblioteca interna do FCL: $targetPath")
+        if (target.isFile && target.length() > 0L) return
         if (!parent.exists() && !parent.mkdirs()) {
             throw IllegalStateException("Não foi possível criar a pasta de bibliotecas internas do FCL.")
         }
         val temp = File(parent, target.name + ".tmp")
         try {
-            val stream = FclGameLaunchCoordinator::class.java.getResourceAsStream(resourcePath)
-                ?: throw IllegalStateException("Biblioteca interna do FCL não encontrada: $resourcePath")
+            val assetPath = resourcePath.removePrefix("/assets/").removePrefix("/")
+            val stream = try {
+                context.assets.open(assetPath)
+            } catch (_: Exception) {
+                // Fallback: alguns empacotamentos incluem o JAR como recurso Java.
+                FclGameLaunchCoordinator::class.java.getResourceAsStream(resourcePath)
+                    ?: throw IllegalStateException("Biblioteca interna do FCL não encontrada: $resourcePath")
+            }
             stream.use { input ->
                 Files.copy(input, temp.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
+            check(temp.length() > 0L) { "Biblioteca interna do FCL vazia: ${target.name}" }
             try {
                 Files.move(
                     temp.toPath(),
@@ -238,6 +275,34 @@ object FclGameLaunchCoordinator {
             continuation.invokeOnCancellation {
                 runCatching { executor.cancel() }
             }
+        }
+    }
+}
+
+/**
+ * Monta o texto de diagnóstico exibido ao usuário quando a inicialização falha.
+ * Puro (sem Android), para poder ser testado na JVM.
+ */
+fun buildLaunchDiagnostic(error: Throwable, stage: String, logDir: String?): String {
+    val causes = buildList {
+        val visited = HashSet<Throwable>()
+        var cause: Throwable? = error
+        while (cause != null && size < 5 && visited.add(cause)) {
+            add("${cause.javaClass.simpleName}: ${cause.message.orEmpty().ifBlank { "(sem mensagem)" }}")
+            cause = cause.cause
+        }
+    }
+    return buildString {
+        appendLine("A inicialização falhou na etapa: $stage")
+        appendLine()
+        appendLine("Erros:")
+        causes.forEachIndexed { index, line ->
+            appendLine("${index + 1}. $line")
+        }
+        if (!logDir.isNullOrBlank()) {
+            appendLine()
+            appendLine("Logs completos do FCL (arquivos launcher.log e minecraft.log):")
+            appendLine(logDir)
         }
     }
 }
