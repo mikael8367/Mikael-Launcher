@@ -353,6 +353,7 @@ private fun VersionsScreen() {
                     installProgress = progress
                 }
                 if (selectedLoader == "Vanilla") {
+                    com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(context, entry.id)
                     saveProfiles(profiles + entry.id, entry.id)
                     installedVersion = entry.id
                 } else {
@@ -365,6 +366,7 @@ private fun VersionsScreen() {
                         ?: error("Não há uma versão compatível de $selectedLoader selecionada.")
                     val result = com.mikael.launcher.engine.java.ModLoaderProfileInstaller(gameDir)
                         .install(entry.id, backend, loaderVersion)
+                    com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(context, result.profileId)
                     saveProfiles(profiles + result.profileId, result.profileId)
                     installedVersion = result.profileId
                 }
