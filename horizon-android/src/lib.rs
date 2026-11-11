@@ -1,4 +1,4 @@
-use jni::objects::{JClass, JString};
+use jni::objects::JClass;
 use jni::sys::{jboolean, jint, jlong, jstring, JNI_FALSE, JNI_TRUE};
 use jni::JNIEnv;
 use std::collections::HashMap;
@@ -22,11 +22,19 @@ fn create_session(width: i32, height: i32) -> i64 {
     if width <= 0 || height <= 0 {
         return 0;
     }
+
     let handle = NEXT_HANDLE.fetch_add(1, Ordering::Relaxed);
     let Ok(mut active) = sessions().lock() else {
         return 0;
     };
-    active.insert(handle, Session { width: width as u32, height: height as u32 });
+
+    active.insert(
+        handle,
+        Session {
+            width: width as u32,
+            height: height as u32,
+        },
+    );
     handle
 }
 
@@ -34,7 +42,11 @@ fn destroy_session(handle: i64) -> bool {
     if handle <= 0 {
         return false;
     }
-    sessions().lock().map(|mut active| active.remove(&handle).is_some()).unwrap_or(false)
+
+    sessions()
+        .lock()
+        .map(|mut active| active.remove(&handle).is_some())
+        .unwrap_or(false)
 }
 
 #[no_mangle]
@@ -46,7 +58,10 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
     let status = format!(
         r#"{{"library":"loaded","stage":"jni-prototype","renderer":"not-integrated","activeSessions":{active_sessions}}}"#
     );
-    env.new_string(status).map(|value| value.into_raw()).unwrap_or(std::ptr::null_mut())
+
+    env.new_string(status)
+        .map(|value| value.into_raw())
+        .unwrap_or(std::ptr::null_mut())
 }
 
 #[no_mangle]
@@ -55,7 +70,10 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
     _class: JClass,
 ) -> jstring {
     let capabilities = r#"{"abi":"arm64-v8a","jni":true,"vulkan":false,"gles":false,"touchInput":false,"minecraftRuntime":false}"#;
-    env.new_string(capabilities).map(|value| value.into_raw()).unwrap_or(std::ptr::null_mut())
+
+    env.new_string(capabilities)
+        .map(|value| value.into_raw())
+        .unwrap_or(std::ptr::null_mut())
 }
 
 #[no_mangle]
@@ -74,7 +92,11 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
     _class: JClass,
     handle: jlong,
 ) -> jboolean {
-    if destroy_session(handle as i64) { JNI_TRUE } else { JNI_FALSE }
+    if destroy_session(handle as i64) {
+        JNI_TRUE
+    } else {
+        JNI_FALSE
+    }
 }
 
 #[cfg(test)]
