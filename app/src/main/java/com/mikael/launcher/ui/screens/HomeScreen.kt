@@ -97,15 +97,14 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
     LaunchedEffect(Unit) {
         try {
             val actualProfiles = FclGameLaunchCoordinator.installedVersionIds(context.applicationContext)
-            if (actualProfiles.isNotEmpty()) {
-                versionProfiles = actualProfiles
-                val saved = prefs.getString(SELECTED_VERSION_PROFILE, "").orEmpty()
-                selectedVersion = saved.takeIf { it in actualProfiles } ?: actualProfiles.first()
-                prefs.edit()
-                    .putString(INSTALLED_VERSION_PROFILES, actualProfiles.joinToString("\n"))
-                    .putString(SELECTED_VERSION_PROFILE, selectedVersion)
-                    .apply()
-            }
+            versionProfiles = actualProfiles
+            val saved = prefs.getString(SELECTED_VERSION_PROFILE, "").orEmpty()
+            selectedVersion = saved.takeIf { it in actualProfiles }
+                ?: actualProfiles.firstOrNull().orEmpty()
+            prefs.edit()
+                .putString(INSTALLED_VERSION_PROFILES, actualProfiles.joinToString("\n"))
+                .putString(SELECTED_VERSION_PROFILE, selectedVersion)
+                .apply()
         } catch (_: Exception) {
             // Keep the last saved selection visible; the launch dialog will show
             // the detailed FCL diagnostic if the profile cannot be resolved.
