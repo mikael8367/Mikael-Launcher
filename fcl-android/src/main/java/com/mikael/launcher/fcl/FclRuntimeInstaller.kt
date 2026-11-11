@@ -209,18 +209,11 @@ object FclRuntimeInstaller {
         } catch (error: Exception) {
             throw IOException("Java ${runtime.majorVersion}: architecture library directory is invalid.", error)
         }
-        val jvmRoot = if (FCLauncher.isJDK8(root.absolutePath)) {
-            File(root, "jre$libDir")
-        } else {
-            File(root, libDir)
-        }
-        val serverJvm = File(jvmRoot, "server/libjvm.so")
-        val clientJvm = File(jvmRoot, "client/libjvm.so")
-        val jvmLibrary = when {
-            serverJvm.isFile -> serverJvm
-            clientJvm.isFile -> clientJvm
-            else -> throw IOException("Java ${runtime.majorVersion}: ARM64 libjvm.so was not found.")
-        }
+        val jvmLibrary = resolveFclJvmLibrary(
+            root = root,
+            libDir = libDir,
+            isJdk8 = FCLauncher.isJDK8(root.absolutePath)
+        ) ?: throw IOException("Java ${runtime.majorVersion}: ARM64 libjvm.so was not found.")
         validateArm64Elf(java, "bin/java")
         validateArm64Elf(jvmLibrary, "libjvm.so")
         return javaVersion
@@ -273,4 +266,20 @@ object FclRuntimeInstaller {
             throw IOException("Could not remove temporary runtime path: ${file.absolutePath}")
         }
     }
+}
+
+
+/**
+ * FCLauncher.getJavaLibDir returns an absolute-looking path (for example
+ * "/lib/aarch64"). Strip its leading slash before resolving it under the
+ * extracted runtime root; otherwise java.io.File may resolve it at filesystem
+ * root and every freshly extracted runtime will fail validation.
+ */
+internal fun resolveFclJvmLibrary(root: File, libDir: String, isJdk8: Boolean): File? {
+    val relativeLibDir = libDir.trimStart('/').takeIf { it.isNotBlank() } ?: return null
+    val jvmRoot = File(root, if (isJdk8) "jre/$relativeLibDir" else relativeLibDir)
+    return listOf(
+        File(jvmRoot, "server/libjvm.so"),
+        File(jvmRoot, "client/libjvm.so")
+    ).firstOrNull { it.isFile }
 }
