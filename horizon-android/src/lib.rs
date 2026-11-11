@@ -99,7 +99,6 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
     }
 }
 
-
 #[cfg(target_os = "android")]
 mod android_surface {
     use std::sync::Arc;
@@ -130,7 +129,9 @@ mod android_surface {
         fn initialize(&mut self, event_loop: &ActiveEventLoop) -> Result<(), String> {
             let window = Arc::new(
                 event_loop
-                    .create_window(Window::default_attributes().with_title("Horizon Rust • Android renderer"))
+                    .create_window(
+                        Window::default_attributes().with_title("Horizon Rust • Android renderer"),
+                    )
                     .map_err(|error| format!("Falha ao criar janela Android: {error}"))?,
             );
             let size = window.inner_size();
@@ -138,21 +139,22 @@ mod android_surface {
             let surface = instance
                 .create_surface(window.clone())
                 .map_err(|error| format!("Falha ao criar superfície Winit: {error}"))?;
-            let adapter = pollster::block_on(instance.request_adapter(
-                &wgpu::RequestAdapterOptions {
+            let adapter =
+                pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
                     power_preference: wgpu::PowerPreference::HighPerformance,
                     compatible_surface: Some(&surface),
                     force_fallback_adapter: false,
-                },
-            ))
-            .map_err(|error| format!("Nenhum adaptador gráfico compatível: {error}"))?;
-            let (device, queue) = pollster::block_on(
-                adapter.request_device(&wgpu::DeviceDescriptor::default()),
-            )
-            .map_err(|error| format!("Falha ao criar dispositivo gráfico: {error}"))?;
+                }))
+                .map_err(|error| format!("Nenhum adaptador gráfico compatível: {error}"))?;
+            let (device, queue) =
+                pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+                    .map_err(|error| format!("Falha ao criar dispositivo gráfico: {error}"))?;
             let config = surface
                 .get_default_config(&adapter, size.width.max(1), size.height.max(1))
-                .ok_or_else(|| "A GPU não oferece configuração de apresentação para esta superfície.".to_string())?;
+                .ok_or_else(|| {
+                    "A GPU não oferece configuração de apresentação para esta superfície."
+                        .to_string()
+                })?;
             surface.configure(&device, &config);
 
             self.window = Some(window.clone());
@@ -174,12 +176,14 @@ mod android_surface {
             match gpu.surface.get_current_texture() {
                 wgpu::CurrentSurfaceTexture::Success(frame)
                 | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
-                    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-                    let mut encoder = gpu.device.create_command_encoder(
-                        &wgpu::CommandEncoderDescriptor {
-                            label: Some("horizon-android-surface-probe"),
-                        },
-                    );
+                    let view = frame
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default());
+                    let mut encoder =
+                        gpu.device
+                            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                                label: Some("horizon-android-surface-probe"),
+                            });
                     {
                         let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: Some("horizon-android-clear-pass"),
@@ -205,8 +209,7 @@ mod android_surface {
                     gpu.queue.submit(Some(encoder.finish()));
                     frame.present();
                 }
-                wgpu::CurrentSurfaceTexture::Outdated
-                | wgpu::CurrentSurfaceTexture::Lost => {
+                wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
                     gpu.surface.configure(&gpu.device, &gpu.config);
                 }
                 wgpu::CurrentSurfaceTexture::Timeout
