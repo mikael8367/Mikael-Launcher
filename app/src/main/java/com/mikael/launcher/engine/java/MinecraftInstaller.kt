@@ -1,0 +1,325 @@
+package com.mikael.launcher.engine.java
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicInteger
+
+data class MinecraftInstallProgress(
+    val stage: String,
+    val completed: Int,
+    val total: Int,
+    val currentFile: String
+) {
+    val fraction: Float
+        get() = if (total <= 0) 0f else completed.toFloat() / total.toFloat()
+}
+
+data class MinecraftInstallResult(
+    val versionId: String,
+    val gameDirectory: File,
+    val downloadedFiles: Int
+)
+
+/**
+ * Downloads official Mojang version metadata, client, applicable Maven libraries,
+ * native classifier archives, asset index/objects and client logging configuration.
+ *
+ * Files are kept inside the app-private game directory. Native archives are stored
+ * but deliberately not extracted/advertised as Android-compatible until the FCL
+ * ARM64 native adapter is wired and verified.
+ */
+class MinecraftInstaller(
+    private val gameDirectory: File,
+    private val maxParallelDownloads: Int = 4
+) {
+    suspend fun install(
+        versionId: String,
+        metadataUrl: String,
+        metadataSha1: String? = null,
+        onProgress: suspend (MinecraftInstallProgress) -> Unit = {}
+    ): MinecraftInstallResult = withContext(Dispatchers.IO) {
+        require(versionId.isNotBlank() && !versionId.contains('/') && !versionId.contains('\\') &&
+            versionId != "." && versionId != "..") { "ID de versão inválido." }
+        require(metadataUrl.startsWith("https://")) { "A URL do manifesto precisa usar HTTPS." }
+        require(maxParallelDownloads in 1..8) { "Paralelismo fora do limite permitido." }
+
+        val root = gameDirectory.canonicalFile
+        if (!root.exists() && !root.mkdirs()) error("Não foi possível criar a pasta do Minecraft.")
+        val metadataBytes = readUrl(metadataUrl)
+        if (!metadataSha1.isNullOrBlank() && sha1(metadataBytes) != metadataSha1.lowercase()) {
+            error("O SHA-1 do manifesto da versão não confere.")
+        }
+        val metadataText = metadataBytes.toString(Charsets.UTF_8)
+        val metadata = JSONObject(metadataText)
+        val declaredId = metadata.optString("id", versionId)
+        require(declaredId == versionId) { "O manifesto retornou uma versão diferente da selecionada." }
+
+        val versionRoot = safeResolve(root, "versions/$versionId")
+        val versionJson = safeResolve(root, "versions/$versionId/$versionId.json")
+        val tasks = mutableListOf<DownloadTask>()
+        val downloads = metadata.optJSONObject("downloads")
+        val client = downloads?.optJSONObject("client")
+            ?: error("Esta versão não fornece um arquivo client oficial para instalação automática.")
+
+        tasks += DownloadTask(
+            client.getString("url"),
+            safeResolve(root, "versions/$versionId/$versionId.jar"),
+            client.optString("sha1").takeIf { it.isNotBlank() },
+            client.optLong("size").takeIf { it > 0L },
+            "$versionId.jar"
+        )
+
+        val libraries = metadata.optJSONArray("libraries")
+        if (libraries != null) {
+            for (i in 0 until libraries.length()) {
+                val library = libraries.optJSONObject(i) ?: continue
+                if (!libraryApplies(library)) continue
+                val name = library.optString("name")
+                val libDownloads = library.optJSONObject("downloads")
+                val artifact = libDownloads?.optJSONObject("artifact")
+                if (artifact != null) {
+                    val relative = artifact.optString("path").ifBlank { mavenPath(name) }
+                    tasks += taskFromJson(artifact, safeResolve(root, "libraries/$relative"), name)
+                } else {
+                    val coordinate = name.takeIf { it.isNotBlank() } ?: continue
+                    val relative = mavenPath(coordinate)
+                    val repository = library.optString("url").ifBlank { "https://libraries.minecraft.net/" }
+                    tasks += DownloadTask(
+                        repository.trimEnd('/') + "/" + relative,
+                        safeResolve(root, "libraries/$relative"),
+                        null,
+                        null,
+                        coordinate
+                    )
+                }
+
+                val natives = library.optJSONObject("natives")
+                val classifiers = libDownloads?.optJSONObject("classifiers")
+                val nativeTemplate = natives?.optString("linux")?.takeIf { it.isNotBlank() }
+                if (nativeTemplate != null && classifiers != null) {
+                    val arch = if (System.getProperty("os.arch").contains("64")) "64" else "32"
+                    val classifier = nativeTemplate.replace("$" + "{arch}", arch)
+                    val nativeArtifact = classifiers.optJSONObject(classifier)
+                    if (nativeArtifact != null) {
+                        val relative = nativeArtifact.optString("path").ifBlank {
+                            mavenPath(name.substringBefore('@') + ":" + classifier)
+                        }
+                        tasks += taskFromJson(
+                            nativeArtifact,
+                            safeResolve(root, "libraries/$relative"),
+                            "$name ($classifier)"
+                        )
+                    }
+                }
+            }
+        }
+
+        val assetIndexInfo = metadata.optJSONObject("assetIndex")
+        if (assetIndexInfo != null) {
+            val indexId = assetIndexInfo.optString("id").ifBlank { versionId }
+            val indexFile = safeResolve(root, "assets/indexes/$indexId.json")
+            val indexText = readUrl(assetIndexInfo.getString("url")).toString(Charsets.UTF_8)
+            val expectedIndexSha1 = assetIndexInfo.optString("sha1")
+            if (expectedIndexSha1.isNotBlank() && sha1(indexText.toByteArray()) != expectedIndexSha1.lowercase()) {
+                error("O índice de assets está corrompido (SHA-1 inválido).")
+            }
+            writeAtomically(indexFile, indexText.toByteArray(Charsets.UTF_8))
+            val objects = JSONObject(indexText).optJSONObject("objects")
+            if (objects != null) {
+                val keys = objects.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val obj = objects.optJSONObject(key) ?: continue
+                    val hash = obj.optString("hash")
+                    if (!hash.matches(Regex("[a-fA-F0-9]{40}"))) continue
+                    val prefix = hash.substring(0, 2).lowercase()
+                    tasks += DownloadTask(
+                        "https://resources.download.minecraft.net/$prefix/$hash",
+                        safeResolve(root, "assets/objects/$prefix/$hash"),
+                        hash.lowercase(),
+                        obj.optLong("size").takeIf { it > 0L },
+                        "asset $key"
+                    )
+                }
+            }
+        }
+
+        val logging = metadata.optJSONObject("logging")?.optJSONObject("client")?.optJSONObject("file")
+        if (logging != null && logging.optString("url").isNotBlank()) {
+            val path = logging.optString("id").ifBlank { "client-logging.xml" }
+            tasks += taskFromJson(logging, safeResolve(root, "versions/$versionId/$path"), "logging config")
+        }
+
+        versionRoot.mkdirs()
+        writeAtomically(versionJson, metadataText.toByteArray(Charsets.UTF_8))
+
+        val completed = AtomicInteger(0)
+        val total = tasks.size
+        val semaphore = kotlinx.coroutines.sync.Semaphore(maxParallelDownloads)
+        coroutineScope {
+            tasks.map { task ->
+                async(Dispatchers.IO) {
+                    semaphore.acquire()
+                    try {
+                        download(task)
+                        val count = completed.incrementAndGet()
+                        withContext(Dispatchers.Main) {
+                            onProgress(
+                                MinecraftInstallProgress(
+                                    stage = "Baixando arquivos oficiais",
+                                    completed = count,
+                                    total = total,
+                                    currentFile = task.label
+                                )
+                            )
+                        }
+                    } finally {
+                        semaphore.release()
+                    }
+                }
+            }.awaitAll()
+        }
+
+        MinecraftInstallResult(versionId, versionRoot, completed.get())
+    }
+
+    private data class DownloadTask(
+        val url: String,
+        val target: File,
+        val sha1: String?,
+        val size: Long?,
+        val label: String
+    )
+
+    private fun taskFromJson(json: JSONObject, target: File, label: String) = DownloadTask(
+        json.getString("url"),
+        target,
+        json.optString("sha1").takeIf { it.isNotBlank() },
+        json.optLong("size").takeIf { it > 0L },
+        label
+    )
+
+    private fun libraryApplies(library: JSONObject): Boolean {
+        val rules = library.optJSONArray("rules") ?: return true
+        var allowed = false
+        for (i in 0 until rules.length()) {
+            val rule = rules.optJSONObject(i) ?: continue
+            val os = rule.optJSONObject("os")
+            val osName = os?.optString("name")
+            val osMatches = osName.isNullOrBlank() || osName == "linux"
+            val archPattern = os?.optString("arch").orEmpty()
+            val archMatches = archPattern.isBlank() || runCatching {
+                Regex(archPattern).containsMatchIn(System.getProperty("os.arch").orEmpty())
+            }.getOrDefault(false)
+            if (osMatches && archMatches) {
+                allowed = rule.optString("action") == "allow"
+            }
+        }
+        return allowed
+    }
+
+    private fun mavenPath(coordinate: String): String {
+        val normalized = coordinate.substringBefore('@')
+        val parts = normalized.split(':')
+        require(parts.size >= 3) { "Coordenada Maven inválida: $coordinate" }
+        val groupPath = parts[0].replace('.', '/')
+        val artifact = parts[1]
+        val version = parts[2]
+        val classifier = parts.getOrNull(3)?.let { "-$it" }.orEmpty()
+        val extension = coordinate.substringAfter('@', "jar")
+        return "$groupPath/$artifact/$version/$artifact-$version$classifier.$extension"
+    }
+
+    private suspend fun download(task: DownloadTask) {
+        task.target.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("Falha ao criar ${it.path}") }
+        if (task.target.isFile && isValid(task.target, task.sha1, task.size)) return
+        val part = File(task.target.parentFile, task.target.name + ".part")
+        if (part.exists()) part.delete()
+        val connection = URL(task.url).openConnection() as HttpURLConnection
+        connection.connectTimeout = 20000
+        connection.readTimeout = 45000
+        connection.instanceFollowRedirects = true
+        connection.setRequestProperty("User-Agent", "MikaelLauncher/0.1.0 (Minecraft asset installer)")
+        try {
+            val status = connection.responseCode
+            if (status !in 200..299) error("Download falhou ($status): ${task.label}")
+            connection.inputStream.use { input ->
+                part.outputStream().buffered().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                    }
+                }
+            }
+        } finally {
+            connection.disconnect()
+        }
+        if (!isValid(part, task.sha1, task.size)) {
+            part.delete()
+            error("Arquivo inválido após download: ${task.label}")
+        }
+        if (task.target.exists() && !task.target.delete()) {
+            part.delete()
+            error("Não foi possível substituir ${task.target.name}")
+        }
+        if (!part.renameTo(task.target)) {
+            part.copyTo(task.target, overwrite = true)
+            part.delete()
+        }
+    }
+
+    private fun isValid(file: File, expectedSha1: String?, expectedSize: Long?): Boolean {
+        if (!file.isFile || file.length() == 0L) return false
+        if (expectedSize != null && file.length() != expectedSize) return false
+        return expectedSha1.isNullOrBlank() || sha1(file.readBytes()) == expectedSha1.lowercase()
+    }
+
+    private fun safeResolve(root: File, relative: String): File {
+        require(relative.isNotBlank() && !relative.startsWith('/') && !relative.contains('\\')) {
+            "Caminho de arquivo inválido."
+        }
+        val target = File(root, relative).canonicalFile
+        val prefix = root.canonicalPath + File.separator
+        require(target.path.startsWith(prefix)) { "Caminho fora da pasta do jogo bloqueado." }
+        return target
+    }
+
+    private fun readUrl(url: String): ByteArray {
+        require(url.startsWith("https://")) { "Download HTTP inseguro bloqueado." }
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.connectTimeout = 20000
+        connection.readTimeout = 45000
+        connection.setRequestProperty("User-Agent", "MikaelLauncher/0.1.0")
+        return try {
+            val status = connection.responseCode
+            if (status !in 200..299) error("Falha HTTP $status ao consultar metadados.")
+            connection.inputStream.use { it.readBytes() }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun writeAtomically(target: File, bytes: ByteArray) {
+        target.parentFile?.mkdirs()
+        val temp = File(target.parentFile, target.name + ".tmp")
+        temp.writeBytes(bytes)
+        if (target.exists() && !target.delete()) error("Não foi possível atualizar ${target.name}")
+        if (!temp.renameTo(target)) {
+            temp.copyTo(target, overwrite = true)
+            temp.delete()
+        }
+    }
+
+    private fun sha1(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }
+}
