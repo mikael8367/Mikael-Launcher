@@ -68,7 +68,7 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBridge_nativeGetCapabilities(
-    mut env: JNIEnv,
+    env: JNIEnv,
     _class: JClass,
 ) -> jstring {
     let gpu_validated = GPU_VALIDATED.load(Ordering::Relaxed);
@@ -147,7 +147,7 @@ mod android_surface {
                     .map_err(|error| format!("Falha ao criar janela Android: {error}"))?,
             );
             let size = window.inner_size();
-            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
             let surface = instance
                 .create_surface(window.clone())
                 .map_err(|error| format!("Falha ao criar superfície Winit: {error}"))?;
@@ -156,6 +156,7 @@ mod android_surface {
                     power_preference: wgpu::PowerPreference::HighPerformance,
                     compatible_surface: Some(&surface),
                     force_fallback_adapter: false,
+                    ..Default::default()
                 }))
                 .map_err(|error| format!("Nenhum adaptador gráfico compatível: {error}"))?;
             let (device, queue) =
@@ -222,10 +223,11 @@ mod android_surface {
                             depth_stencil_attachment: None,
                             timestamp_writes: None,
                             occlusion_query_set: None,
+                            multiview_mask: None,
                         });
                     }
                     gpu.queue.submit(Some(encoder.finish()));
-                    frame.present();
+                    gpu.queue.present(frame);
                 }
                 wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
                     gpu.surface.configure(&gpu.device, &gpu.config);
