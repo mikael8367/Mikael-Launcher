@@ -39,12 +39,6 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
-    kotlin {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        }
-    }
-
     sourceSets.getByName("main") {
         val upstream = file("../third_party/FoldCraftLauncher/FCL/src/main")
         java.srcDir(upstream.resolve("java"))
@@ -68,6 +62,12 @@ android {
 
     lint {
         targetSdk = 34
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
