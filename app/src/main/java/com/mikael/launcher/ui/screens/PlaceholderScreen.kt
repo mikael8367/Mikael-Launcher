@@ -210,7 +210,7 @@ private fun PlayScreen() {
         }
         InfoCard(
             title = "Resumo da seleção",
-            body = "Motor: $engine\nPerfil: $profile\nEstado: aguardando integração do motor.",
+            body = "Motor: $engine\nPerfil: $profile\nEstado: para iniciar o Minecraft Java de verdade, use a tela Início e o botão ▶ Iniciar.",
             accent = AccentBlue
         )
         Button(
@@ -224,8 +224,8 @@ private fun PlayScreen() {
     }
     if (showInfo) {
         InfoDialog(
-            title = "Motor ainda não conectado",
-            message = "A seleção de motor e perfil já funciona. A inicialização real será ligada quando os módulos Java e Horizon forem implementados."
+            title = "Como iniciar o jogo",
+            message = "A seleção de motor e perfil já funciona. A inicialização real do Minecraft Java está na tela Início, no botão ▶ Iniciar."
         ) { showInfo = false }
     }
 }
