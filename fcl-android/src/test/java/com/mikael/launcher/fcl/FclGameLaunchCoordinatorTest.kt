@@ -7,6 +7,7 @@ import org.junit.Test
 class FclGameLaunchCoordinatorTest {
     @Test
     fun acceptsValidOfflinePlayerNames() {
+        assertTrue(FclGameLaunchCoordinator.isValidOfflineUsername("A"))
         assertTrue(FclGameLaunchCoordinator.isValidOfflineUsername("Player"))
         assertTrue(FclGameLaunchCoordinator.isValidOfflineUsername("Mikael_123"))
         assertTrue(FclGameLaunchCoordinator.isValidOfflineUsername("A".repeat(16)))
