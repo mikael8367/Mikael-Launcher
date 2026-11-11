@@ -11,7 +11,11 @@ import com.tungsten.fclcore.util.Logging
 import java.io.File
 import java.nio.file.Paths
 import java.util.logging.Level
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -37,6 +41,10 @@ data class FclBootstrapStatus(
  */
 object FclEngineBootstrap {
     private val mutex = Mutex()
+    private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    fun initializeInBackground(context: Context): Job =
+        processScope.launch { initialize(context.applicationContext) }
 
     @Volatile
     private var currentStatus = FclBootstrapStatus(
