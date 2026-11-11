@@ -126,6 +126,7 @@ class ModLoaderProfileInstaller(
         try {
             connection.inputStream.use { input ->
                 part.outputStream().buffered().use { output -> input.copyTo(output) }
+            }
         } finally {
             connection.disconnect()
         }
