@@ -81,7 +81,10 @@ object JavaRuntimeInspector {
             )
         }
 
-        val osArch = Regex("""(?m)^OS_ARCH="?([^"\\r\\n]+)"?\\s*$""")
+        // Raw string: single backslashes. Escaping as \\r\\n here would make the
+        // regex exclude the literal letters 'r'/'n' and require a backslash at the
+        // end of the line, so OS_ARCH would never be detected at all.
+        val osArch = Regex("""(?m)^OS_ARCH="?([^"\r\n]+)"?\s*$""")
             .find(releaseText)?.groupValues?.getOrNull(1)?.trim()
         val archDirectories = listOfNotNull(
             osArch,

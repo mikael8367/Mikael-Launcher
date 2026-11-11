@@ -82,6 +82,60 @@ import com.mikael.launcher.ui.theme.Surface as PanelSurface
 import com.mikael.launcher.ui.theme.SurfaceRaised
 import com.mikael.launcher.ui.theme.TextPrimary
 import com.mikael.launcher.ui.theme.TextSecondary
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+
+/**
+ * Sessão de instalação com escopo de processo. A instalação do Minecraft pode
+ * levar vários minutos e não pode morrer quando o usuário navega para outra
+ * seção: um LaunchedEffect é cancelado junto com a composição que o criou.
+ * O estado vive aqui, fora da composição, e a UI apenas observa.
+ */
+internal object MinecraftInstallSession {
+    var inProgress by mutableStateOf(false)
+        private set
+    var progress by mutableStateOf<MinecraftInstallProgress?>(null)
+        private set
+    var error by mutableStateOf<String?>(null)
+        private set
+    var finishedProfileId by mutableStateOf<String?>(null)
+        private set
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Executa a instalação fora da composição. Ignora chamadas concorrentes. */
+    fun start(work: suspend () -> String) {
+        if (inProgress) return
+        inProgress = true
+        error = null
+        progress = null
+        scope.launch {
+            try {
+                finishedProfileId = work()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                error = failure.message ?: "Falha desconhecida durante a instalação."
+            } finally {
+                inProgress = false
+            }
+        }
+    }
+
+    /** Consome o perfil concluído (chamar uma única vez a partir da UI). */
+    fun consumeResult(): String? = finishedProfileId.also { finishedProfileId = null }
+
+    /** Registra um erro de validação detectado na UI antes de iniciar. */
+    fun reportError(message: String) {
+        error = message
+    }
+
+    /** Publica o progresso vindo dos instaladores (chamado no callback deles). */
+    fun reportProgress(value: MinecraftInstallProgress?) {
+        progress = value
+    }
+}
 
 @Composable
 fun PlaceholderScreen(section: LauncherSection) {
@@ -235,9 +289,6 @@ private fun VersionsScreen() {
     var selectedTab by rememberSaveable { mutableStateOf("Recentes") }
     var searchText by rememberSaveable { mutableStateOf("") }
     var showInfo by rememberSaveable { mutableStateOf(false) }
-    var installRequested by rememberSaveable { mutableStateOf(false) }
-    var installProgress by remember { mutableStateOf<MinecraftInstallProgress?>(null) }
-    var installError by remember { mutableStateOf<String?>(null) }
     var loaderVersions by remember { mutableStateOf<List<com.mikael.launcher.engine.java.LoaderRelease>>(emptyList()) }
     var forgeVersions by remember { mutableStateOf<List<com.mikael.launcher.engine.java.LoaderRelease>>(emptyList()) }
     var selectedForgeVersion by rememberSaveable { mutableStateOf("") }
@@ -350,11 +401,24 @@ private fun VersionsScreen() {
             .apply()
     }
 
-    LaunchedEffect(installRequested) {
-        if (!installRequested) return@LaunchedEffect
-        installError = null
-        installProgress = null
-        try {
+    LaunchedEffect(MinecraftInstallSession.finishedProfileId) {
+        val finished = MinecraftInstallSession.finishedProfileId ?: return@LaunchedEffect
+        installedVersion = finished
+        showInfo = true
+        MinecraftInstallSession.consumeResult()
+    }
+
+    fun startInstall() {
+        if (MinecraftInstallSession.inProgress) return
+        val installable = selectedLoader == "Vanilla" ||
+            (selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine") && selectedLoaderVersion.isNotBlank()) ||
+            (selectedLoader == "Forge + OptiFine" && selectedForgeVersion.isNotBlank() && selectedLoaderVersion.isNotBlank())
+        if (!installable) {
+            MinecraftInstallSession.reportError("$selectedLoader não possui um instalador compatível disponível para esta versão.")
+            return
+        }
+        val applicationContext = context.applicationContext
+        MinecraftInstallSession.start {
             val entry = catalog.firstOrNull { it.id == selectedVersion }
                 ?: error("A versão selecionada não está disponível no catálogo oficial.")
             if (selectedLoader == "Forge + OptiFine") {
@@ -363,10 +427,10 @@ private fun VersionsScreen() {
                 val optiFineVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
                     ?: error("Selecione uma versão de OptiFine compatível.")
                 val result = com.mikael.launcher.fcl.FclModLoaderInstaller.installForgeOptiFine(
-                    context, entry.id, forgeVersion, optiFineVersion
+                    applicationContext, entry.id, forgeVersion, optiFineVersion
                 )
                 saveProfiles(profiles + result.profileId, result.profileId)
-                installedVersion = result.profileId
+                result.profileId
             } else if (selectedLoader in setOf("Forge", "NeoForge", "OptiFine")) {
                 val backend = when (selectedLoader) {
                     "Forge" -> com.mikael.launcher.fcl.FclModLoader.FORGE
@@ -376,23 +440,23 @@ private fun VersionsScreen() {
                 val loaderVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
                     ?: error("Não há uma versão compatível de $selectedLoader selecionada.")
                 val result = com.mikael.launcher.fcl.FclModLoaderInstaller.install(
-                    context, entry.id, backend, loaderVersion
+                    applicationContext, entry.id, backend, loaderVersion
                 )
                 saveProfiles(profiles + result.profileId, result.profileId)
-                installedVersion = result.profileId
+                result.profileId
             } else {
-                val gameDir = FclGameDirectoryResolver.resolve(context)
+                val gameDir = FclGameDirectoryResolver.resolve(applicationContext)
                 MinecraftInstaller(gameDir).install(
                     versionId = entry.id,
                     metadataUrl = entry.url,
                     metadataSha1 = entry.sha1
                 ) { progress ->
-                    installProgress = progress
+                    MinecraftInstallSession.reportProgress(progress)
                 }
                 if (selectedLoader == "Vanilla") {
-                    com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(context, entry.id)
+                    com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(applicationContext, entry.id)
                     saveProfiles(profiles + entry.id, entry.id)
-                    installedVersion = entry.id
+                    entry.id
                 } else {
                     val backend = when (selectedLoader) {
                         "Fabric" -> com.mikael.launcher.engine.java.SupportedProfileLoader.FABRIC
@@ -403,18 +467,11 @@ private fun VersionsScreen() {
                         ?: error("Não há uma versão compatível de $selectedLoader selecionada.")
                     val result = com.mikael.launcher.engine.java.ModLoaderProfileInstaller(gameDir)
                         .install(entry.id, backend, loaderVersion)
-                    com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(context, result.profileId)
+                    com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(applicationContext, result.profileId)
                     saveProfiles(profiles + result.profileId, result.profileId)
-                    installedVersion = result.profileId
+                    result.profileId
                 }
             }
-            showInfo = true
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Exception) {
-            installError = error.message ?: "Falha desconhecida durante a instalação."
-        } finally {
-            installRequested = false
         }
     }
 
@@ -572,22 +629,12 @@ private fun VersionsScreen() {
             }
             AnimatedLauncherButton(
                 text = when {
-                    installRequested -> "Instalando..."
+                    MinecraftInstallSession.inProgress -> "Instalando..."
                     selectedLoader == "Vanilla" -> "⬇  Baixar e instalar Vanilla"
                     selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine", "Forge + OptiFine") -> "⬇  Instalar $selectedLoader"
                     else -> "$selectedLoader indisponível"
                 },
-                onClick = {
-                    if (!installRequested) {
-                        if (selectedLoader == "Vanilla" ||
-                            selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine") && selectedLoaderVersion.isNotBlank() || selectedLoader == "Forge + OptiFine" && selectedForgeVersion.isNotBlank() && selectedLoaderVersion.isNotBlank()
-                        ) {
-                            installRequested = true
-                        } else {
-                            installError = "$selectedLoader não possui um instalador compatível disponível para esta versão."
-                        }
-                    }
-                },
+                onClick = { startInstall() },
                 modifier = Modifier.fillMaxWidth()
             )
             Text(
@@ -595,14 +642,14 @@ private fun VersionsScreen() {
                 color = TextSecondary,
                 fontSize = 10.sp
             )
-            installProgress?.let { progress ->
+            MinecraftInstallSession.progress?.let { progress ->
                 Text(
                     "${progress.stage}: ${progress.completed}/${progress.total}\n${progress.currentFile}",
                     color = PrimaryGreen,
                     fontSize = 10.sp
                 )
             }
-            installError?.let { error ->
+            MinecraftInstallSession.error?.let { error ->
                 Text("Falha na instalação: $error", color = AccentYellow, fontSize = 11.sp)
             }
         } else {

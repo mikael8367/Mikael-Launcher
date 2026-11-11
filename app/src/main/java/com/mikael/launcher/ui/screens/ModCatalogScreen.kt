@@ -61,6 +61,16 @@ private const val MOD_PAGE_SIZE = 20
 private const val MOD_PREFS = "mikael_launcher_mod_sources"
 private const val CURSE_KEY = "curseforge_api_key"
 
+/**
+ * Decide se a paginação deve continuar após uma página carregada.
+ * Continua apenas quando a página veio cheia (pode haver mais resultados)
+ * E o merge com dedupe realmente acrescentou itens novos. Sem essa segunda
+ * condição, fontes combinadas ("Ambos") com itens duplicados entre elas
+ * fariam a lista nunca crescer e a paginação rodaria para sempre.
+ */
+internal fun shouldContinuePaging(previousTotal: Int, updatedTotal: Int, pageRawSize: Int, pageSize: Int): Boolean =
+    pageRawSize >= pageSize && updatedTotal > previousTotal
+
 private data class CatalogMod(
     val id: String,
     val name: String,
@@ -110,9 +120,10 @@ fun ModCatalogScreen() {
                         curseKey = currentApiKey
                     )
                 }
+                val previousCount = if (reset) 0 else mods.size
                 mods = if (reset) result.mods else (mods + result.mods).distinctBy { it.source + ":" + it.id }
                 page = requestedPage + 1
-                hasMore = result.mods.size >= MOD_PAGE_SIZE
+                hasMore = shouldContinuePaging(previousCount, mods.size, result.mods.size, MOD_PAGE_SIZE)
                 message = result.notice ?: if (mods.isEmpty()) "Nenhum mod encontrado para esses filtros." else ""
             } catch (error: Exception) {
                 message = error.message ?: "Não foi possível consultar os catálogos."

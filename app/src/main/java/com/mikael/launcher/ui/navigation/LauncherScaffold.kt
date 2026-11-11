@@ -45,7 +45,7 @@ fun LauncherScaffold(modifier: Modifier = Modifier) {
     var selectedAccount by rememberSaveable {
         mutableStateOf(accountPrefs.getString("selected_account", "").orEmpty())
     }
-    val accounts = accountNames.split("\\n").filter { it.isNotBlank() }.distinct()
+    val accounts = parseAccountNames(accountNames)
     val currentSection = LauncherSection.valueOf(selected)
 
     Row(
@@ -80,7 +80,7 @@ fun LauncherScaffold(modifier: Modifier = Modifier) {
                         accounts = accounts,
                         selectedAccount = selectedAccount,
                         onAddAccount = { name ->
-                            accountNames = (accounts + name).distinct().joinToString("\\n")
+                            accountNames = (accounts + name).distinct().joinToString("\n")
                             selectedAccount = name
                             accountPrefs.edit()
                                 .putString("account_names", accountNames)
@@ -92,7 +92,7 @@ fun LauncherScaffold(modifier: Modifier = Modifier) {
                             accountPrefs.edit().putString("selected_account", name).apply()
                         },
                         onRemoveAccount = { name ->
-                            accountNames = accounts.filterNot { it == name }.joinToString("\\n")
+                            accountNames = accounts.filterNot { it == name }.joinToString("\n")
                             if (selectedAccount == name) selectedAccount = ""
                             accountPrefs.edit()
                                 .putString("account_names", accountNames)
@@ -109,3 +109,15 @@ fun LauncherScaffold(modifier: Modifier = Modifier) {
         FirstRunRuntimeDialog(onFinished = { showRuntimeSetup = false })
     }
 }
+
+/**
+ * Faz o parse da lista de contas persistida. Versões antigas gravavam os nomes
+ * separados pelo texto literal "\n" (dois caracteres), enquanto gravações novas
+ * usam quebra de linha real. Aceitamos os dois formatos (e misturas) para não
+ * perder contas salvas por builds anteriores.
+ */
+internal fun parseAccountNames(raw: String): List<String> =
+    raw.split("\n", "\\n")
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .distinct()

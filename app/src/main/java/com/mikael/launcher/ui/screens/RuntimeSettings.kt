@@ -52,6 +52,10 @@ internal const val PREF_GAME_TREE_URI = "minecraft_game_tree_uri"
 val JAVA_RUNTIMES = listOf("Java 8", "Java 17", "Java 21", "Java 25")
 val RENDERER_BACKENDS = listOf("GL4ES", "Zink", "VirGL", "ANGLE", "Vulkan (experimental)", "Software")
 
+/** Parses "Java 17" into 17. Returns null instead of crashing on corrupted preferences. */
+internal fun runtimeMajorFromLabel(label: String): Int? =
+    label.substringAfter("Java ", "").trim().toIntOrNull()
+
 @Composable
 fun RuntimeSettingsPanel() {
     val context = LocalContext.current
@@ -131,8 +135,10 @@ fun RuntimeSettingsPanel() {
                 installDetail = "Iniciando instalação de $runtime..."
                 scope.launch {
                     try {
-                        val major = runtime.substringAfter("Java ").toInt()
-                        val target = FclJavaRuntime.values().first { it.majorVersion == major }
+                        val major = runtimeMajorFromLabel(runtime)
+                            ?: throw IllegalStateException("Runtime Java inválido: $runtime")
+                        val target = FclJavaRuntime.values().firstOrNull { it.majorVersion == major }
+                            ?: throw IllegalStateException("Runtime Java não suportado: $runtime")
                         val result = FclRuntimeInstaller.install(context.applicationContext, target) { progress ->
                             mainHandler.post { installDetail = progress.detail }
                         }
