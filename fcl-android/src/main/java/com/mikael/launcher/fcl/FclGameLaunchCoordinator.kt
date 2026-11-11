@@ -101,7 +101,9 @@ object FclGameLaunchCoordinator {
             unpackBuiltinJar("/assets/game/MioLaunchWrapper.jar", FCLPath.MIO_LAUNCH_WRAPPER)
 
             val setting = profile.getVersionSetting(versionId)
-            val javaVersion = withContext(Dispatchers.Main) {
+            // JavaManager scans runtime metadata and resolves filesystem paths.
+            // Keep that work off the UI thread to avoid freezing the launcher on Android.
+            val javaVersion = withContext(Dispatchers.IO) {
                 if (setting.java == "Auto") {
                     JavaManager.getSuitableJavaVersion(version)
                 } else {
@@ -111,9 +113,11 @@ object FclGameLaunchCoordinator {
             check(javaVersion.getVersion() > 0) {
                 "Não existe um runtime Java compatível instalado para esta versão."
             }
-            val javaHome = File(javaVersion.getJavaPath(version))
-            check(javaHome.resolve("release").isFile && javaHome.resolve("bin/java").isFile) {
-                "O runtime " + javaVersion.name + " está incompleto. Reinstale esse runtime nas configurações."
+            withContext(Dispatchers.IO) {
+                val javaHome = File(javaVersion.getJavaPath(version))
+                check(javaHome.resolve("release").isFile && javaHome.resolve("bin/java").isFile) {
+                    "O runtime " + javaVersion.name + " está incompleto. Reinstale esse runtime nas configurações."
+                }
             }
 
             // A tela de contas atual mantém nomes offline locais; autenticação Microsoft
