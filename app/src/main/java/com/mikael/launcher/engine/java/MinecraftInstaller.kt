@@ -556,7 +556,14 @@ internal fun minecraftLibraryApplies(
 internal fun minecraftLibraryArtifact(library: JSONObject): JSONObject? {
     val coordinate = library.optString("name").trim()
     if (coordinate.isBlank()) return null
-    val artifact = library.optJSONObject("downloads")?.optJSONObject("artifact")
+    val downloads = library.optJSONObject("downloads")
+    val artifact = downloads?.optJSONObject("artifact")
+    // Some Mojang entries (for example net.java.jinput:jinput-platform)
+    // publish only OS-specific classifiers. They do not have a plain
+    // <artifact>-<version>.jar at the Maven root. On Android, desktop native
+    // classifiers are supplied/replaced by the FCL Android runtime, so do not
+    // synthesize and request a non-existent main artifact.
+    if (artifact == null && downloads?.optJSONObject("classifiers") != null) return null
     val path = artifact?.optString("path").orEmpty().ifBlank { minecraftMavenPath(coordinate) }
     val explicitUrl = artifact?.optString("url").orEmpty().trim()
     val repository = library.optString("url").trim().ifBlank { "https://libraries.minecraft.net/" }
