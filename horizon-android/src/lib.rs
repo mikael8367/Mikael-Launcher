@@ -147,7 +147,8 @@ mod android_surface {
                     .map_err(|error| format!("Falha ao criar janela Android: {error}"))?,
             );
             let size = window.inner_size();
-            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+            let instance =
+                wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
             let surface = instance
                 .create_surface(window.clone())
                 .map_err(|error| format!("Falha ao criar superfície Winit: {error}"))?;
