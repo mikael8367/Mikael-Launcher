@@ -161,11 +161,12 @@ class MinecraftInstaller(
         versionRoot.mkdirs()
         writeAtomically(versionJson, metadataText.toByteArray(Charsets.UTF_8))
 
+        val uniqueTasks = tasks.distinctBy { it.target.canonicalPath }
         val completed = AtomicInteger(0)
-        val total = tasks.size
+        val total = uniqueTasks.size
         val semaphore = kotlinx.coroutines.sync.Semaphore(maxParallelDownloads)
         coroutineScope {
-            tasks.map { task ->
+            uniqueTasks.map { task ->
                 async(Dispatchers.IO) {
                     semaphore.acquire()
                     try {
@@ -226,23 +227,14 @@ class MinecraftInstaller(
         return allowed
     }
 
-    private fun mavenPath(coordinate: String): String {
-        val normalized = coordinate.substringBefore('@')
-        val parts = normalized.split(':')
-        require(parts.size >= 3) { "Coordenada Maven inválida: $coordinate" }
-        val groupPath = parts[0].replace('.', '/')
-        val artifact = parts[1]
-        val version = parts[2]
-        val classifier = parts.getOrNull(3)?.let { "-$it" }.orEmpty()
-        val extension = coordinate.substringAfter('@', "jar")
-        return "$groupPath/$artifact/$version/$artifact-$version$classifier.$extension"
-    }
+    private fun mavenPath(coordinate: String): String = minecraftMavenPath(coordinate)
 
     private suspend fun download(task: DownloadTask) {
         task.target.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("Falha ao criar ${it.path}") }
         if (task.target.isFile && isValid(task.target, task.sha1, task.size)) return
         val part = File(task.target.parentFile, task.target.name + ".part")
         if (part.exists()) part.delete()
+        require(task.url.startsWith("https://")) { "Download HTTP inseguro bloqueado: ${task.label}" }
         val connection = URL(task.url).openConnection() as HttpURLConnection
         connection.connectTimeout = 20000
         connection.readTimeout = 45000
@@ -250,6 +242,7 @@ class MinecraftInstaller(
         connection.setRequestProperty("User-Agent", "MikaelLauncher/0.1.0 (Minecraft asset installer)")
         try {
             val status = connection.responseCode
+            if (connection.url.protocol != "https") error("Redirecionamento para HTTP inseguro bloqueado.")
             if (status !in 200..299) error("Download falhou ($status): ${task.label}")
             connection.inputStream.use { input ->
                 part.outputStream().buffered().use { output ->
@@ -281,7 +274,7 @@ class MinecraftInstaller(
     private fun isValid(file: File, expectedSha1: String?, expectedSize: Long?): Boolean {
         if (!file.isFile || file.length() == 0L) return false
         if (expectedSize != null && file.length() != expectedSize) return false
-        return expectedSha1.isNullOrBlank() || sha1(file.readBytes()) == expectedSha1.lowercase()
+        return expectedSha1.isNullOrBlank() || sha1(file) == expectedSha1.lowercase()
     }
 
     private fun safeResolve(root: File, relative: String): File {
@@ -322,4 +315,30 @@ class MinecraftInstaller(
 
     private fun sha1(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }
+
+    private fun sha1(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-1")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+}
+
+internal fun minecraftMavenPath(coordinate: String): String {
+    val normalized = coordinate.substringBefore('@')
+    val parts = normalized.split(':')
+    require(parts.size >= 3) { "Coordenada Maven inválida: $coordinate" }
+    val groupPath = parts[0].replace('.', '/')
+    val artifact = parts[1]
+    val version = parts[2]
+    val classifier = parts.getOrNull(3)?.let { "-$it" }.orEmpty()
+    val extension = coordinate.substringAfter('@', "jar")
+    require(extension.matches(Regex("[A-Za-z0-9]+"))) { "Extensão Maven inválida." }
+    return "$groupPath/$artifact/$version/$artifact-$version$classifier.$extension"
 }
