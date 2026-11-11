@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Soft orbit and dark emerald field -->
+    <path android:fillColor="#071A13" android:pathData="M54,5 A49,49 0,1 1,53.9 5 Z" />
+    <path android:fillColor="#0B2B1D" android:pathData="M54,12 A42,42 0,1 1,53.9 12 Z" />
+    <path android:fillColor="#16A34A" android:fillAlpha="0.18" android:pathData="M54,16 A38,38 0,1 1,53.9 16 Z" />
+    <!-- Floating voxel grass block -->
+    <path android:fillColor="#7BE35B" android:pathData="M54,25 L86,43 L54,61 L22,43 Z" />
+    <path android:fillColor="#3F9B38" android:pathData="M22,43 L54,61 L54,91 L22,73 Z" />
+    <path android:fillColor="#246B32" android:pathData="M86,43 L54,61 L54,91 L86,73 Z" />
+    <path android:fillColor="#A5F477" android:pathData="M54,25 L70,34 L54,43 L38,34 Z" />
+    <path android:fillColor="#4CC34B" android:pathData="M38,34 L54,43 L54,61 L22,43 Z" />
+    <path android:fillColor="#2F8E3D" android:pathData="M70,34 L86,43 L54,61 L54,43 Z" />
+    <!-- Pixel details -->
+    <path android:fillColor="#B5F58B" android:pathData="M43,31 L49,34 L43,38 L37,35 Z" />
+    <path android:fillColor="#1F5C2B" android:pathData="M28,49 L36,54 L36,62 L28,57 Z" />
+    <path android:fillColor="#174B28" android:pathData="M72,65 L80,60 L80,68 L72,73 Z" />
+    <path android:fillColor="#A7EF63" android:pathData="M58,49 L65,45 L70,48 L63,52 Z" />
+    <!-- Crown -->
+    <path android:fillColor="#F6C945" android:pathData="M33,28 L27,15 L40,22 L54,9 L68,22 L81,15 L75,32 L54,39 Z" />
+    <path android:fillColor="#FFF0A3" android:pathData="M33,28 L27,15 L40,22 L54,9 L54,34 Z" />
+    <path android:fillColor="#D99A24" android:pathData="M54,9 L68,22 L81,15 L75,32 L54,39 Z" />
+    <path android:fillColor="#FCE58A" android:pathData="M39,31 L69,31 L66,37 L42,37 Z" />
+    <!-- Bold block M -->
+    <path android:fillColor="#07130E" android:pathData="M31,47 L43,47 L54,60 L65,47 L77,47 L77,81 L65,81 L65,65 L54,77 L43,65 L43,81 L31,81 Z" />
+    <path android:fillColor="#E9F7E9" android:pathData="M35,51 L43,51 L54,64 L65,51 L73,51 L73,76 L68,76 L68,60 L54,74 L40,60 L40,76 L35,76 Z" />
+    <path android:fillColor="#A7D9B2" android:pathData="M43,51 L54,64 L54,74 L40,60 L40,76 L35,76 L35,51 Z" />
+    <path android:fillColor="#B7E8C1" android:pathData="M65,51 L73,51 L73,76 L68,76 L68,60 L54,74 L54,64 Z" />
+    <!-- Emerald edge highlights -->
+    <path android:fillColor="#67E58B" android:fillAlpha="0.9" android:pathData="M20,43 L22,42 L22,73 L20,72 Z" />
+    <path android:fillColor="#67E58B" android:fillAlpha="0.9" android:pathData="M86,42 L88,43 L88,72 L86,73 Z" />
+</vector>
