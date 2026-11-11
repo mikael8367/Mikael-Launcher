@@ -14,9 +14,9 @@ O repositório é o projeto correto: uma reimplementação nativa em Rust do Min
 
 - Workspace Rust usa edition 2024 e exige Rust 1.95+.
 - Preparação de recursos do jogo exige JDK 25 e uma cópia legítima do Minecraft Java 26.3, incluindo o client e server jar próprios do usuário.
-- O cliente usa winit 0.30.13 e wgpu 30.0.1 com Vulkan, Metal e GLES habilitados em features. Isso não prova que o aplicativo esteja integrado ou testado em Android.
+- O cliente usa winit e wgpu com backends gráficos multiplataforma. O upstream atual contém módulos Android de estado de entrada/gamepad/teclado, mas isso não prova que o launcher e o cliente completo estejam integrados ou testados como app Android.
 - O launcher upstream usa GPUI e dependências de desktop; não é uma biblioteca Android que possa ser adicionada diretamente ao app Compose.
-- O cliente upstream possui entrada de teclado/mouse; a adaptação de toque, lifecycle Android, superfície gráfica, áudio, permissões, armazenamento e pausa/retomada ainda precisa ser projetada e testada.
+- O upstream atual possui módulos de entrada Android para gamepad e keypad, mas a integração com a Activity/Surface do nosso app, toque, áudio, permissões, armazenamento e pausa/retomada ainda precisa ser conectada e testada.
 - O projeto não executa mods Java de Forge/Fabric/NeoForge. Tem formatos e API próprios para mods Horizon.
 - A preparação dos recursos envolve JDK 25; não se deve assumir que a rotina desktop de preparação possa ser executada diretamente no Android.
 
@@ -28,7 +28,7 @@ O alvo inicial do Mikael Launcher é Android ARM64. A compatibilidade com o Gala
 
 1. Manter Horizon como motor separado do motor Java/FCL.
 2. Fixar uma revisão upstream e auditar crates, licenças, recursos, scripts de build e dependências nativas.
-3. Criar um alvo Android ARM64 experimental, com entrypoint Android e ciclo de vida nativo, sem incluir o launcher GPUI desktop.
+3. Integrar o cliente upstream ao alvo Android ARM64 experimental, sem incluir o launcher GPUI desktop; validar se o event loop e o backend winit/wgpu podem operar no ciclo de vida Android.
 4. Compilar primeiro um protótipo mínimo Rust + JNI/NativeActivity e validar carregamento ARM64 e superfície gráfica.
 5. Validar winit/wgpu no Android e testar Vulkan/GLES por detecção de capacidade; tratar incompatibilidade como erro recuperável.
 6. Adaptar entrada por toque, armazenamento privado/SAF, áudio, rede, ciclo de vida e logs.
@@ -39,8 +39,9 @@ O alvo inicial do Mikael Launcher é Android ARM64. A compatibilidade com o Gala
 ## Bloqueios atuais
 
 - Sem release Android oficial.
-- Sem build Android comprovado.
-- Sem inicialização Android comprovada.
+- Sem release Android ARM64 oficial.
+- Sem build reproduzível do cliente completo neste app.
+- Sem inicialização Android do jogo comprovada.
 - Sem validação de Vulkan/GLES no dispositivo-alvo.
 - Sem integração de toque/lifecycle/armazenamento/áudio.
 - Sem artefato Android e checksum para o instalador.
