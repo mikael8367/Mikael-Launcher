@@ -160,7 +160,7 @@ fun HorizonRustScreen() {
                         )
                     }
                     Text(
-                        "Sem pacote Android oficial disponível",
+                        "Sem launcher Android ARM64 publicado",
                         color = TextSecondary,
                         fontSize = 10.sp
                     )
@@ -193,9 +193,9 @@ fun HorizonRustScreen() {
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text("• Compilação nativa Android ARM64", color = TextSecondary, fontSize = 11.sp)
-                Text("• Integração JNI/Android e ciclo de vida", color = TextSecondary, fontSize = 11.sp)
-                Text("• Testes de Vulkan/GLES e entrada por toque", color = TextSecondary, fontSize = 11.sp)
+                Text("• Empacotar e validar o cliente Android ARM64 completo", color = TextSecondary, fontSize = 11.sp)
+                Text("• Ligar o cliente real ao JNI e ao ciclo de vida Android", color = TextSecondary, fontSize = 11.sp)
+                Text("• Validar Vulkan/GLES no aparelho e controles por toque", color = TextSecondary, fontSize = 11.sp)
                 Text("• Preparação de recursos, instalação e inicialização", color = TextSecondary, fontSize = 11.sp)
             }
         }
@@ -207,7 +207,7 @@ fun HorizonRustScreen() {
             title = { Text("Instalação Android ainda indisponível") },
             text = {
                 Text(
-                    "O repositório oficial não oferece um pacote Android. A versão desktop não pode ser instalada diretamente no Android. Primeiro precisamos criar e testar uma compilação ARM64, adaptar gráficos, toque e ciclo de vida, e só então ativar o instalador. Nenhum arquivo será baixado agora."
+                    "O código upstream já contém módulos de entrada específicos para Android, mas as releases atuais do launcher Horizon continuam publicando pacotes para Windows, macOS e Linux — não um launcher Android ARM64. O protótipo JNI deste repositório ainda só cria sessões de teste: não inicializa o cliente Horizon, renderer ou mundo. Precisamos integrar os crates reais, adaptar superfície/lifecycle/armazenamento e validar GLES/Vulkan no aparelho antes de liberar instalar ou jogar. Nenhum arquivo será baixado agora."
                 )
             },
             confirmButton = {
