@@ -1,5 +1,7 @@
 package com.mikael.launcher.ui.screens
 
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +38,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mikael.launcher.HorizonNativeActivity
 import com.mikael.launcher.ui.components.AnimatedLauncherButton
 import com.mikael.launcher.ui.theme.AccentPurple
 import com.mikael.launcher.ui.theme.OutlineSoft
@@ -48,6 +51,7 @@ import com.mikael.launcher.ui.theme.TextSecondary
 @Composable
 fun HorizonRustScreen() {
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
     var showInstallInfo by rememberSaveable { mutableStateOf(false) }
 
     Column(
@@ -166,6 +170,18 @@ fun HorizonRustScreen() {
                     )
                 }
                 AnimatedLauncherButton(
+                    text = "Testar renderizador Android (WGPU)",
+                    onClick = {
+                        context.startActivity(Intent(context, HorizonNativeActivity::class.java))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "Teste técnico da superfície gráfica nativa. Ainda não inicia o Minecraft Horizon nem carrega mundos.",
+                    color = TextSecondary,
+                    fontSize = 10.sp
+                )
+                AnimatedLauncherButton(
                     text = "Consultar disponibilidade",
                     onClick = { showInstallInfo = true },
                     modifier = Modifier.fillMaxWidth()
@@ -193,10 +209,10 @@ fun HorizonRustScreen() {
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text("• Empacotar e validar o cliente Android ARM64 completo", color = TextSecondary, fontSize = 11.sp)
-                Text("• Ligar o cliente real ao JNI e ao ciclo de vida Android", color = TextSecondary, fontSize = 11.sp)
-                Text("• Validar Vulkan/GLES no aparelho e controles por toque", color = TextSecondary, fontSize = 11.sp)
-                Text("• Preparação de recursos, instalação e inicialização", color = TextSecondary, fontSize = 11.sp)
+                Text("• JNI e NativeActivity com ciclo de vida Winit: protótipo implementado", color = TextSecondary, fontSize = 11.sp)
+                Text("• Superfície WGPU com seleção de backend Vulkan/GLES: teste técnico adicionado", color = TextSecondary, fontSize = 11.sp)
+                Text("• Validar renderização no aparelho e entrada por toque", color = TextSecondary, fontSize = 11.sp)
+                Text("• Integrar o cliente Horizon completo, recursos, mundos e salvamento", color = TextSecondary, fontSize = 11.sp)
             }
         }
     }
@@ -207,7 +223,7 @@ fun HorizonRustScreen() {
             title = { Text("Instalação Android ainda indisponível") },
             text = {
                 Text(
-                    "O código upstream já contém módulos de entrada específicos para Android, mas as releases atuais do launcher Horizon continuam publicando pacotes para Windows, macOS e Linux — não um launcher Android ARM64. O protótipo JNI deste repositório ainda só cria sessões de teste: não inicializa o cliente Horizon, renderer ou mundo. Precisamos integrar os crates reais, adaptar superfície/lifecycle/armazenamento e validar GLES/Vulkan no aparelho antes de liberar instalar ou jogar. Nenhum arquivo será baixado agora."
+                    "O código upstream já contém módulos de entrada específicos para Android, mas as releases atuais do launcher Horizon continuam publicando pacotes para Windows, macOS e Linux — não um launcher Android ARM64. O protótipo agora abre uma NativeActivity com Winit e tenta criar uma superfície WGPU usando os backends gráficos disponíveis. Isso valida apenas a janela e o clear da GPU: ainda não inicializa o cliente Horizon, não carrega o Minecraft, mundos ou recursos. O próximo passo é integrar o cliente real e validar o teste em um aparelho ARM64. Nenhum APK foi gerado."
                 )
             },
             confirmButton = {
