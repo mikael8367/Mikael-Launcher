@@ -280,8 +280,14 @@ object FclRuntimeInstaller {
 internal fun resolveFclJvmLibrary(root: File, libDir: String, isJdk8: Boolean): File? {
     val relativeLibDir = libDir.trimStart('/').takeIf { it.isNotBlank() } ?: return null
     val jvmRoot = File(root, if (isJdk8) "jre/$relativeLibDir" else relativeLibDir)
-    return listOf(
+    val candidates = listOf(
         File(jvmRoot, "server/libjvm.so"),
-        File(jvmRoot, "client/libjvm.so")
-    ).firstOrNull { it.isFile }
+        File(jvmRoot, "client/libjvm.so"),
+        // Some upstream JRE archives place lib/ at the runtime root even
+        // for Java 8. Prefer the documented nested layout, then accept the
+        // exact root-level layout after checking the ELF ABI.
+        File(root, "$relativeLibDir/server/libjvm.so"),
+        File(root, "$relativeLibDir/client/libjvm.so")
+    )
+    return candidates.firstOrNull { it.isFile }
 }
