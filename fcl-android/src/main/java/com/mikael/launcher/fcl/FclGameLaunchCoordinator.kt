@@ -10,6 +10,7 @@ import com.tungsten.fcl.game.FCLGameLauncher
 import com.tungsten.fcl.setting.Accounts
 import com.tungsten.fcl.setting.Profiles
 import com.tungsten.fcl.util.JnaNatives
+import com.tungsten.fclauncher.FCLauncher
 import com.tungsten.fclauncher.utils.FCLPath
 import com.tungsten.fclcore.auth.offline.OfflineAccountFactory
 import com.tungsten.fclcore.download.MaintainTask
@@ -87,7 +88,9 @@ object FclGameLaunchCoordinator {
             val verifyAbnormalLaunch = withContext(Dispatchers.IO) {
                 repository.unmarkVersionLaunchedAbnormally(versionId)
             }
-            val dependencyManager = profile.getDependency()
+            val dependencyManager = withContext(Dispatchers.IO) {
+                profile.getDependency()
+            }
             runTask(dependencyManager.checkGameCompletionAsync(version, verifyAbnormalLaunch))
 
             if (gameVersion != null) {
@@ -97,10 +100,12 @@ object FclGameLaunchCoordinator {
             // These two FCL-owned patchers are extracted by the upstream launch
             // flow before preparing the JVM. They are required by some legacy
             // and modern launch paths, so materialize them before building classpath.
-            unpackBuiltinJar("/assets/game/MioLibPatcher.jar", FCLPath.LIB_PATCHER_PATH)
-            unpackBuiltinJar("/assets/game/MioLaunchWrapper.jar", FCLPath.MIO_LAUNCH_WRAPPER)
-
-            val setting = profile.getVersionSetting(versionId)
+            // Extract bundled FCL patchers and read profile settings away from the UI thread.
+            val setting = withContext(Dispatchers.IO) {
+                unpackBuiltinJar("/assets/game/MioLibPatcher.jar", FCLPath.LIB_PATCHER_PATH)
+                unpackBuiltinJar("/assets/game/MioLaunchWrapper.jar", FCLPath.MIO_LAUNCH_WRAPPER)
+                profile.getVersionSetting(versionId)
+            }
             // JavaManager scans runtime metadata and resolves filesystem paths.
             // Keep that work off the UI thread to avoid freezing the launcher on Android.
             val javaVersion = withContext(Dispatchers.IO) {
@@ -114,9 +119,23 @@ object FclGameLaunchCoordinator {
                 "Não existe um runtime Java compatível instalado para esta versão."
             }
             withContext(Dispatchers.IO) {
-                val javaHome = File(javaVersion.getJavaPath(version))
-                check(javaHome.resolve("release").isFile && javaHome.resolve("bin/java").isFile) {
-                    "O runtime " + javaVersion.name + " está incompleto. Reinstale esse runtime nas configurações."
+                val javaHome = File(javaVersion.getJavaPath(version)).canonicalFile
+                val javaExecutable = javaHome.resolve("bin/java")
+                val jvmLibrary = runCatching {
+                    resolveFclJvmLibrary(
+                        root = javaHome,
+                        libDir = FCLauncher.getJavaLibDir(javaHome.absolutePath),
+                        isJdk8 = FCLauncher.isJDK8(javaHome.absolutePath)
+                    )
+                }.getOrNull()
+                check(
+                    javaHome.resolve("release").isFile &&
+                        javaExecutable.isFile &&
+                        javaExecutable.canExecute() &&
+                        jvmLibrary?.isFile == true
+                ) {
+                    "O runtime " + javaVersion.name +
+                        " está incompleto ou sem executável/JVM ARM64. Reinstale esse runtime nas configurações."
                 }
             }
 
