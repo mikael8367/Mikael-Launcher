@@ -161,7 +161,14 @@ class MinecraftInstaller(
         versionRoot.mkdirs()
         writeAtomically(versionJson, metadataText.toByteArray(Charsets.UTF_8))
 
-        val uniqueTasks = tasks.distinctBy { it.target.canonicalPath }
+        val uniqueTasks = tasks.groupBy { it.target.canonicalPath }.values.map { duplicates ->
+            val hashes = duplicates.mapNotNull { it.sha1?.lowercase() }.distinct()
+            val sizes = duplicates.mapNotNull { it.size }.distinct()
+            require(hashes.size <= 1 && sizes.size <= 1) {
+                "O manifesto contém dependências conflitantes para o mesmo arquivo."
+            }
+            duplicates.firstOrNull { !it.sha1.isNullOrBlank() } ?: duplicates.first()
+        }
         val completed = AtomicInteger(0)
         val total = uniqueTasks.size
         val semaphore = kotlinx.coroutines.sync.Semaphore(maxParallelDownloads)
@@ -220,7 +227,11 @@ class MinecraftInstaller(
             val archMatches = archPattern.isBlank() || runCatching {
                 Regex(archPattern).containsMatchIn(System.getProperty("os.arch").orEmpty())
             }.getOrDefault(false)
-            if (osMatches && archMatches) {
+            val features = rule.optJSONObject("features")
+            val featuresMatch = features == null || features.keys().asSequence().all { key ->
+                !features.optBoolean(key, false)
+            }
+            if (osMatches && archMatches && featuresMatch) {
                 allowed = rule.optString("action") == "allow"
             }
         }
@@ -295,6 +306,7 @@ class MinecraftInstaller(
         connection.setRequestProperty("User-Agent", "MikaelLauncher/0.1.0")
         return try {
             val status = connection.responseCode
+            if (connection.url.protocol != "https") error("Redirecionamento para HTTP inseguro bloqueado.")
             if (status !in 200..299) error("Falha HTTP $status ao consultar metadados.")
             connection.inputStream.use { it.readBytes() }
         } finally {
@@ -333,8 +345,18 @@ class MinecraftInstaller(
 internal fun minecraftMavenPath(coordinate: String): String {
     val normalized = coordinate.substringBefore('@')
     val parts = normalized.split(':')
-    require(parts.size >= 3) { "Coordenada Maven inválida: $coordinate" }
-    val groupPath = parts[0].replace('.', '/')
+    require(parts.size in 3..4 && parts.all { it.isNotBlank() }) {
+        "Coordenada Maven inválida: $coordinate"
+    }
+    val safePart = Regex("[A-Za-z0-9_.+\\-]+")
+    require(parts.all { safePart.matches(it) && it != "." && it != ".." }) {
+        "Coordenada Maven contém caracteres inválidos."
+    }
+    val groupSegments = parts[0].split('.')
+    require(groupSegments.all { it.isNotBlank() && it != "." && it != ".." }) {
+        "Grupo Maven inválido."
+    }
+    val groupPath = groupSegments.joinToString("/")
     val artifact = parts[1]
     val version = parts[2]
     val classifier = parts.getOrNull(3)?.let { "-$it" }.orEmpty()
