@@ -10,6 +10,7 @@ import com.tungsten.fcl.game.FCLGameLauncher
 import com.tungsten.fcl.setting.Accounts
 import com.tungsten.fcl.setting.Profiles
 import com.tungsten.fcl.util.JnaNatives
+import com.tungsten.fclauncher.utils.FCLPath
 import com.tungsten.fclcore.auth.offline.OfflineAccountFactory
 import com.tungsten.fclcore.download.MaintainTask
 import com.tungsten.fclcore.download.game.GameVerificationFixTask
@@ -20,6 +21,8 @@ import com.tungsten.fclcore.task.TaskListener
 import com.tungsten.fclcore.util.versioning.VersionNumber
 import org.lwjgl.glfw.CallbackBridge
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -90,6 +93,12 @@ object FclGameLaunchCoordinator {
             if (gameVersion != null) {
                 runTask(GameVerificationFixTask(dependencyManager, gameVersion, version))
             }
+
+            // These two FCL-owned patchers are extracted by the upstream launch
+            // flow before preparing the JVM. They are required by some legacy
+            // and modern launch paths, so materialize them before building classpath.
+            unpackBuiltinJar("/assets/game/MioLibPatcher.jar", FCLPath.LIB_PATCHER_PATH)
+            unpackBuiltinJar("/assets/game/MioLaunchWrapper.jar", FCLPath.MIO_LAUNCH_WRAPPER)
 
             val setting = profile.getVersionSetting(versionId)
             val javaVersion = withContext(Dispatchers.Main) {
@@ -177,6 +186,36 @@ object FclGameLaunchCoordinator {
             }
         } finally {
             launching.set(false)
+        }
+    }
+
+    private fun unpackBuiltinJar(resourcePath: String, targetPath: String) {
+        val target = File(targetPath)
+        val parent = target.parentFile
+            ?: throw IllegalStateException("Caminho inválido para biblioteca interna do FCL: $targetPath")
+        if (!parent.exists() && !parent.mkdirs()) {
+            throw IllegalStateException("Não foi possível criar a pasta de bibliotecas internas do FCL.")
+        }
+        val temp = File(parent, target.name + ".tmp")
+        try {
+            val stream = FclGameLaunchCoordinator::class.java.getResourceAsStream(resourcePath)
+                ?: throw IllegalStateException("Biblioteca interna do FCL não encontrada: $resourcePath")
+            stream.use { input ->
+                Files.copy(input, temp.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+            try {
+                Files.move(
+                    temp.toPath(),
+                    target.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE
+                )
+            } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                Files.move(temp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+        } catch (error: Throwable) {
+            runCatching { Files.deleteIfExists(temp.toPath()) }
+            throw IllegalStateException("Falha ao preparar biblioteca interna do FCL: ${target.name}", error)
         }
     }
 
