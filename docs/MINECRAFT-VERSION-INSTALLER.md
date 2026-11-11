@@ -17,7 +17,7 @@ A pesquisa usa o ID da versão. O manifesto é a fonte da URL e do SHA-1 do JSON
 
 ## Instalação oficial implementada
 
-`MinecraftInstaller` grava no diretório de jogo resolvido por `FclGameDirectoryResolver`: por padrão `filesDir/minecraft`; quando o usuário escolhe uma pasta local compatível, usa esse caminho tanto para Vanilla quanto para Fabric/Quilt. O perfil ativo do FCL é apontado para o mesmo diretório.
+`MinecraftInstaller` grava no diretório de jogo resolvido por `FclGameDirectoryResolver`: por padrão `filesDir/minecraft`; quando o usuário escolhe uma pasta local compatível, usa esse caminho para Vanilla, Fabric e Quilt. Forge/NeoForge usam o repositório FCL e criam o perfil completo no mesmo diretório.
 
 1. Baixa e valida o JSON da versão pelo SHA-1 do manifesto.
 2. Baixa o client JAR e verifica SHA-1/tamanho quando fornecidos.
@@ -53,13 +53,15 @@ A tela de versões oferece Vanilla, Forge, NeoForge, Fabric, Legacy Fabric, Quil
 
 - **Fabric:** consulta a API oficial Fabric Meta, lista versões compatíveis com o Minecraft selecionado, baixa o perfil JSON e as bibliotecas, valida HTTPS/SHA-1/tamanho quando declarados e gera um perfil que herda os metadados Mojang.
 - **Quilt:** usa o mesmo fluxo de perfil, consultando a API oficial Quilt Meta e preservando o perfil base do Minecraft.
-- Ambos instalam primeiro a versão Vanilla correspondente. O perfil derivado só é cadastrado depois que os downloads e a gravação do JSON terminam com sucesso.
+- **Forge:** consulta a lista de componentes Forge do FCL e usa `GameBuilder` + `ForgeInstallTask` do FCL. O FCL baixa o installer, identifica o formato antigo/novo, executa os passos necessários e salva o perfil no repositório.
+- **NeoForge:** consulta a lista oficial de versões NeoForge do FCL e usa `NeoForgeInstallTask`, incluindo a cadeia de processors e o runner isolado `:jvm` do FCL.
+- Forge e NeoForge constroem o perfil completo (base Minecraft, bibliotecas, assets e patch do loader) pelo pipeline do FCL; não são tratados como simples download de JAR.
+- Os perfis só entram na lista local depois que o builder conclui, o repositório é atualizado e o perfil gerado é encontrado no disco.
 
-O merge preserva as bibliotecas do Minecraft, adiciona as bibliotecas do loader, combina os argumentos de inicialização e rejeita identificadores/caminhos inseguros. Fontes: documentação da API Fabric Meta e fluxo de instalação Fabric/Quilt.
+Fabric/Quilt preservam as bibliotecas do Minecraft, adicionam bibliotecas do loader, combinam argumentos de inicialização e rejeitam identificadores/caminhos inseguros. Forge/NeoForge delegam a resolução de versões, dependências, instalação e processors ao backend FCL integrado.
 
 ### Ainda pendentes — não apresentados como instaladores funcionais
 
-- **Forge e NeoForge:** precisam de integração do formato de instalador/processors e do bootstrap ForgeWrapper, com geração e validação das bibliotecas específicas.
 - **Legacy Fabric:** precisa de adapter próprio para a API e as versões históricas.
 - **OptiFine:** precisa do patcher compatível com cada geração e de validação das combinações Forge/Vanilla.
 - **LiteLoader e Rift:** precisam de instaladores legados e suporte às versões realmente publicadas.
