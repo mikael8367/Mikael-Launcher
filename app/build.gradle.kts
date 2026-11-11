@@ -50,6 +50,11 @@ kotlin {
 }
 
     packaging {
+        jniLibs {
+            // FCL ships bytehook in its native source set and CMake also imports the AAR copy.
+            // Keep one ARM64 copy when the app merges native libraries.
+            pickFirsts += "lib/arm64-v8a/libbytehook.so"
+        }
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
 }
