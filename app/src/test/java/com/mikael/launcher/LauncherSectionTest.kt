@@ -6,11 +6,12 @@ import org.junit.Test
 
 class LauncherSectionTest {
     @Test
-    fun navigationContainsAllTwelveExpectedSectionsInOrder() {
+    fun navigationContainsAllThirteenExpectedSectionsInOrder() {
         assertEquals(
             listOf(
                 "Início",
                 "Jogar",
+                "Horizon Rust",
                 "Versões",
                 "Contas",
                 "Mods",
@@ -32,6 +33,7 @@ class LauncherSectionTest {
             listOf(
                 "HOME",
                 "PLAY",
+                "HORIZON_RUST",
                 "VERSIONS",
                 "ACCOUNTS",
                 "MODS",
