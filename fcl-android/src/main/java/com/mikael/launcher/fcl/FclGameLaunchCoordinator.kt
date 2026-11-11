@@ -148,9 +148,9 @@ object FclGameLaunchCoordinator {
             val renderer = when (rendererPreference) {
                 "GL4ES" -> RendererManager.RENDERER_GL4ES
                 "Zink" -> RendererManager.RENDERER_ZINK
-                "VirGL" -> RendererManager.RENDERER_VGPU
+                "VGPU" -> RendererManager.RENDERER_VGPU
                 else -> throw IllegalStateException(
-                    "O renderizador $rendererPreference ainda não está disponível no motor FCL. Selecione GL4ES, Zink ou VirGL nas configurações."
+                    "O renderizador $rendererPreference ainda não está disponível no motor FCL. Selecione GL4ES, Zink ou VGPU nas configurações."
                 )
             }
             check(RendererManager.findRenderer(renderer.id) != null) {
