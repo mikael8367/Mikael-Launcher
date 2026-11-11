@@ -19,7 +19,8 @@ Fixar um commit evita que uma atualização upstream inesperada altere o motor d
 - [x] Preparar o checkout do submódulo no CI.
 - [ ] Auditar os módulos Android, bibliotecas nativas e dependências do FCL.
 - [ ] Adaptar o backend FCL à Activity e ao ciclo de vida do Mikael Launcher.
-- [ ] Integrar instalação de versões, bibliotecas, assets e natives.
+- [x] Implementar a primeira camada independente de instalação Vanilla pelo manifesto oficial (client, bibliotecas Maven aplicáveis, cache de classifiers nativos, assets e logging; sem inicialização do jogo).
+- [ ] Adaptar o GameRepository/DependencyManager do FCL, extração e substituição de natives Android ARM64 e layout histórico de assets.
 - [ ] Integrar runtimes Java e renderizadores reais.
 - [ ] Ligar o botão Iniciar ao processo de jogo e encaminhar stdout/stderr para Logs.
 - [ ] Validar Vanilla, Forge, Fabric e OptiFine em dispositivos ARM64 reais.
