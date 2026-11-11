@@ -23,8 +23,10 @@ Foi inspecionado o repositório oficial `horizon-rust/horizon` no commit `b66b2f
 - O pacote `horizon-client-lib` reúne sistemas reutilizáveis do cliente, mas não inicia a sessão jogável por conta própria.
 - O ponto de entrada de jogo está em `crates/horizon-client/src/entry.rs`: `entry::main()` chama `game::run_with()`.
 - O executável upstream chama `horizon_client::entry::main()` a partir de `src/main.rs`.
-- O protótipo Android atual cria o próprio `EventLoop` com `with_android_app(AndroidApp)`. A inicialização upstream precisa receber esse mesmo contexto/event loop; chamar `entry::main()` diretamente criaria uma segunda inicialização de janela/event loop e não constitui integração válida.
-- A próxima alteração correta no upstream é separar a preparação da sessão da criação do event loop, expondo uma entrada que aceite o loop Android já criado, e adaptar o ciclo de vida (`resumed`, `suspended`, `resized`, `redraw`) antes de ligar o renderer real.
+- `crates/horizon-client/src/game/loading_screen.rs` concentra `run_event_loop(Game)`, que cria `EventLoop::new()?.run_app(&mut split)`. O tipo `App` já implementa `winit::application::ApplicationHandler`, encaminhando `resumed`, `window_event`, `device_event` e `about_to_wait` para o carregamento e para o jogo.
+- `crates/horizon-client/src/game/event_loop.rs` já abstrai `exit` e `set_control_flow` por `EventLoopCtl`, inclusive para o modo headless.
+- O protótipo Android atual cria o loop com `EventLoop::builder()` + `with_android_app(AndroidApp)`. Chamar `entry::main()` diretamente não injeta esse loop: o upstream tenta criar outro com `EventLoop::new()`, portanto não é uma integração válida.
+- O caminho de menor risco é refatorar o upstream para expor uma função Android que construa o mesmo `App`/`Split` e execute `run_app` no `EventLoop` criado com `AndroidApp`. Isso preserva o `ApplicationHandler` já existente e evita duplicar o ciclo de vida. Também será necessário tornar acessível a preparação de `Game`/argumentos e validar as dependências e os recursos no target Android.
 
 Por isso, não foi adicionada uma dependência Cargo fictícia nem um botão que alegue iniciar o jogo. A integração do cliente completo permanece pendente até existir esse ponto de extensão no upstream e até as dependências Android do workspace serem validadas. O commit upstream acima é uma referência de auditoria, não uma cópia vendorizada do motor.
 
