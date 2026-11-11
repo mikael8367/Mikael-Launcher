@@ -25,3 +25,8 @@ O verificador lê a versão declarada no arquivo `release` e o cabeçalho ELF de
 - Não habilita o botão Iniciar; o backend FCL e seu ciclo de vida ainda precisam ser integrados.
 
 O objetivo é impedir que um runtime Linux x86/x86_64 seja aceito por engano como runtime Android ARM64. A disponibilidade do motor deve continuar indisponível até existir teste real de inicialização no dispositivo.
+
+
+## Verificações adicionais do executável
+
+O inspetor também valida que `bin/java` possui permissão de execução e cabeçalho ELF compatível com o ABI do dispositivo. A arquitetura do executável e de `lib/server/libjvm.so` é conferida separadamente; um runtime com launcher ELF x86_64 e JVM ARM64 (ou o inverso) é rejeitado. Essas verificações continuam sendo estruturais: não substituem a execução de teste do runtime nem validam todas as dependências do linker Android.
