@@ -45,6 +45,7 @@ object FclModLoaderInstaller {
         requireSafeMinecraftVersion(minecraftVersion)
         ensureFclReady(context)
         val profile = Profiles.getSelectedProfile()
+        alignProfileDirectory(context, profile)
         val dependency = profile.getDependency()
         val list = dependency.getVersionList(loader.componentType)
         awaitTask(list.loadAsync(minecraftVersion))
@@ -70,10 +71,7 @@ object FclModLoaderInstaller {
         }
         ensureFclReady(context)
         val profile = Profiles.getSelectedProfile()
-        val selectedDirectory = FclGameDirectoryResolver.resolve(context.applicationContext).canonicalFile
-        if (profile.gameDir.canonicalFile != selectedDirectory) {
-            profile.gameDir = selectedDirectory
-        }
+        val selectedDirectory = alignProfileDirectory(context, profile)
         val dependency = profile.getDependency()
         val versionList = dependency.getVersionList(loader.componentType)
         awaitTask(versionList.loadAsync(minecraftVersion))
@@ -101,6 +99,20 @@ object FclModLoaderInstaller {
         profile.selectedVersion = profileId
         Profiles.setSelectedProfile(profile)
         FclModLoaderInstallResult(profileId, minecraftVersion, loader, loaderVersion)
+    }
+
+    private fun alignProfileDirectory(
+        context: Context,
+        profile: com.tungsten.fcl.setting.Profile
+    ): File {
+        val selectedDirectory = FclGameDirectoryResolver.resolve(context.applicationContext).canonicalFile
+        if (profile.gameDir.canonicalFile != selectedDirectory) {
+            profile.gameDir = selectedDirectory
+        }
+        // Profile.gameDir starts an asynchronous repository refresh; force a synchronous
+        // refresh before checking IDs or starting GameBuilder to avoid a stale version cache.
+        profile.repository.refreshVersions()
+        return selectedDirectory
     }
 
     private suspend fun ensureFclReady(context: Context) {
