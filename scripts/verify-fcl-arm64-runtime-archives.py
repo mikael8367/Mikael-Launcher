@@ -7,10 +7,13 @@ import tarfile
 from pathlib import Path
 
 VERSIONS = {
-    "jre8": ("jre/lib/aarch64/server/libjvm.so",),
-    "jre17": ("lib/aarch64/server/libjvm.so",),
-    "jre21": ("lib/aarch64/server/libjvm.so",),
-    "jre25": ("lib/aarch64/server/libjvm.so",),
+    # These are the paths present in the pinned FCL archives. Java 8 may
+    # additionally be nested under jre/ after extraction, depending on the
+    # archive layout; the installer validates both forms.
+    "jre8": ("lib/aarch64/server/libjvm.so", "jre/lib/aarch64/server/libjvm.so"),
+    "jre17": ("lib/server/libjvm.so", "lib/aarch64/server/libjvm.so"),
+    "jre21": ("lib/server/libjvm.so", "lib/aarch64/server/libjvm.so"),
+    "jre25": ("lib/server/libjvm.so", "lib/aarch64/server/libjvm.so"),
 }
 
 def members(archive: Path) -> set[str]:
