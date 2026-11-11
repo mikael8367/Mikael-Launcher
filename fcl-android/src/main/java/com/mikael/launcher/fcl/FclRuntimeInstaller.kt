@@ -70,7 +70,7 @@ object FclRuntimeInstaller {
             "This launcher build currently provides Java runtimes for ARM64 only."
         }
 
-        val lock = locks.getOrPut(runtime) { Mutex() }
+        val lock = locks.computeIfAbsent(runtime) { Mutex() }
         return lock.withLock {
             withContext(Dispatchers.IO) {
                 installBlocking(context.applicationContext, runtime, onProgress)
@@ -101,7 +101,15 @@ object FclRuntimeInstaller {
         val staging = File(parent, ".${runtime.directoryName}.installing")
         val backup = File(parent, ".${runtime.directoryName}.backup")
         deleteTree(staging)
-        deleteTree(backup)
+        // If an earlier process died during rollback, recover the last known-good
+        // runtime before starting another installation. Never erase this backup blindly.
+        if (backup.exists()) {
+            if (!target.exists()) {
+                moveDirectory(backup, target)
+            } else {
+                deleteTree(backup)
+            }
+        }
 
         val assetDirectory = runtime.assetDirectory()
         requireAsset(context, "$assetDirectory/version")
@@ -127,8 +135,11 @@ object FclRuntimeInstaller {
                 }
             )
 
+            val javaExecutable = staging.resolve("bin/java")
+            if (!javaExecutable.setExecutable(true, false) && !javaExecutable.canExecute()) {
+                throw IOException("Java ${runtime.majorVersion}: bin/java could not be marked executable.")
+            }
             val version = validateRuntime(staging, runtime)
-            staging.resolve("bin/java").setExecutable(true, false)
 
             if (target.exists()) {
                 moveDirectory(target, backup)
@@ -155,7 +166,10 @@ object FclRuntimeInstaller {
                 deleteTree(target)
             }
             if (previousMoved && backup.exists() && !target.exists()) {
-                runCatching { moveDirectory(backup, target) }
+                runCatching {
+                    moveDirectory(backup, target)
+                    JavaManager.addToJavaVersion(target)
+                }
             }
             deleteTree(staging)
             if (failure is IOException) throw failure
@@ -202,10 +216,34 @@ object FclRuntimeInstaller {
         }
         val serverJvm = File(jvmRoot, "server/libjvm.so")
         val clientJvm = File(jvmRoot, "client/libjvm.so")
-        if (!serverJvm.isFile && !clientJvm.isFile) {
-            throw IOException("Java ${runtime.majorVersion}: ARM64 libjvm.so was not found.")
+        val jvmLibrary = when {
+            serverJvm.isFile -> serverJvm
+            clientJvm.isFile -> clientJvm
+            else -> throw IOException("Java ${runtime.majorVersion}: ARM64 libjvm.so was not found.")
         }
+        validateArm64Elf(java, "bin/java")
+        validateArm64Elf(jvmLibrary, "libjvm.so")
         return javaVersion
+    }
+
+    private fun validateArm64Elf(file: File, label: String) {
+        val header = ByteArray(20)
+        file.inputStream().use { input ->
+            if (input.read(header) != header.size) {
+                throw IOException("$label: incomplete ELF header.")
+            }
+        }
+        val validMagic = header[0] == 0x7f.toByte() &&
+            header[1] == 'E'.code.toByte() &&
+            header[2] == 'L'.code.toByte() &&
+            header[3] == 'F'.code.toByte()
+        val elfClass = header[4].toInt() and 0xff
+        val dataEncoding = header[5].toInt() and 0xff
+        val machine = (header[18].toInt() and 0xff) or
+            ((header[19].toInt() and 0xff) shl 8)
+        if (!validMagic || elfClass != 2 || dataEncoding != 1 || machine != 183) {
+            throw IOException("$label: expected a little-endian ELF64 AArch64 binary.")
+        }
     }
 
     private fun requireAsset(context: Context, path: String) {
