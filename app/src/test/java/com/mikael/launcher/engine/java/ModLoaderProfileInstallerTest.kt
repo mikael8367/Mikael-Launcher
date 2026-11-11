@@ -5,6 +5,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import kotlinx.coroutines.runBlocking
 
 class ModLoaderProfileInstallerTest {
     @Test
@@ -29,7 +30,7 @@ class ModLoaderProfileInstallerTest {
     fun rejectsUnsafeVersionIdentifiers() {
         val installer = ModLoaderProfileInstaller(java.io.File("build/test-minecraft"))
         assertThrows(IllegalArgumentException::class.java) {
-            installer.availableVersions("../outside", SupportedProfileLoader.FABRIC)
+            runBlocking { installer.availableVersions("../outside", SupportedProfileLoader.FABRIC) }
         }
     }
 
