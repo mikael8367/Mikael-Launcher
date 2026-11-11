@@ -250,8 +250,10 @@ internal fun mergeLoaderProfile(
     }
     append(base.optJSONArray("libraries"))
     append(loaderProfile.optJSONArray("libraries"))
+    // This is a fully materialized metadata document; it already contains
+    // the vanilla client, assets and base libraries, so it must not inherit twice.
+    merged.remove("inheritsFrom")
     merged.put("id", profileId)
-        .put("inheritsFrom", minecraftVersion)
         .put("libraries", libraries)
     if (loaderProfile.has("mainClass")) merged.put("mainClass", loaderProfile.get("mainClass"))
     if (loaderProfile.has("arguments")) {
