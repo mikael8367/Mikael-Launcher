@@ -27,6 +27,7 @@ import java.net.HttpURLConnection
 import org.json.JSONObject
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import com.mikael.launcher.engine.java.MinecraftInstaller
 import com.mikael.launcher.engine.java.MinecraftInstallProgress
 import androidx.compose.runtime.LaunchedEffect
@@ -232,6 +233,7 @@ private fun VersionsScreen() {
     var installProgress by remember { mutableStateOf<MinecraftInstallProgress?>(null) }
     var installError by remember { mutableStateOf<String?>(null) }
     var installDone by rememberSaveable { mutableStateOf(false) }
+    var installedVersion by rememberSaveable { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var retryCount by remember { mutableIntStateOf(0) }
     var loadError by remember { mutableStateOf<String?>(null) }
@@ -282,8 +284,11 @@ private fun VersionsScreen() {
                 installProgress = progress
             }
             saveProfiles(profiles + result.versionId, result.versionId)
+            installedVersion = result.versionId
             installDone = true
             showInfo = true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             installError = error.message ?: "Falha desconhecida durante a instalação."
         } finally {
@@ -447,7 +452,7 @@ private fun VersionsScreen() {
     }
     if (showInfo) InfoDialog(
         "Instalação concluída",
-        "Minecraft $selectedVersion foi baixado para o armazenamento privado do launcher. O perfil já aparece na tela inicial. A execução ainda depende da integração do runtime ARM64 e do adaptador FCL."
+        "Minecraft $installedVersion foi baixado para o armazenamento privado do launcher. O perfil já aparece na tela inicial. A execução ainda depende da integração do runtime ARM64 e do adaptador FCL."
     ) { showInfo = false }
 }
 
