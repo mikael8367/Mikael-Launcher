@@ -79,7 +79,11 @@ object FclRuntimeInstaller {
     }
 
     fun installedRuntimes(): List<String> {
-        val javaRoot = File(FCLPath.JAVA_PATH)
+        // Runtime settings can be recomposed while FCL is still bootstrapping.
+        // Do not construct File(null) before FCLPath has supplied its Java root.
+        val javaPath = FCLPath.JAVA_PATH?.takeIf { it.isNotBlank() } ?: return emptyList()
+        val javaRoot = File(javaPath)
+        if (!javaRoot.isDirectory) return emptyList()
         return javaRoot.listFiles()
             .orEmpty()
             .filter { it.isDirectory && File(it, "release").isFile }
