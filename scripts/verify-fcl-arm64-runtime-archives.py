@@ -47,9 +47,14 @@ def main() -> None:
             failures.append(f"{version}: release metadata missing from archives")
         if not any(name == "bin/java" or name.endswith("/bin/java") for name in all_names):
             failures.append(f"{version}: bin/java missing from archives")
-        if not any(any(name == candidate or name.endswith("/" + candidate) for name in all_names)
-                   for candidate in jvm_paths):
-            failures.append(f"{version}: expected ARM64 libjvm.so missing from archives")
+        jvm_entries = sorted(name for name in all_names if "libjvm.so" in name.lower())
+        if not jvm_entries:
+            failures.append(f"{version}: libjvm.so missing from both archives")
+            print(f"{version}: no libjvm.so entry; nearby JVM candidates: " +
+                  repr(sorted(name for name in all_names if "jvm" in name.lower())[:30]), file=sys.stderr)
+        elif not any(any(name == candidate or name.endswith("/" + candidate) for name in jvm_entries)
+                     for candidate in jvm_paths):
+            failures.append(f"{version}: libjvm.so exists at unexpected path(s): {jvm_entries}")
         print(f"{version}: universal={len(universal_names)} entries, arm64={len(arm64_names)} entries")
     if failures:
         print("\n".join(failures), file=sys.stderr)
