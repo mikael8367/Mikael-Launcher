@@ -324,7 +324,17 @@ private fun VersionsScreen() {
         }
     }
 
-    LaunchedEffect(selectedVersion, selectedLoader) {
+    LaunchedEffect(engine, selectedVersion, selectedLoader) {
+        // Horizon is a separate engine and must never query Java mod-loader catalogs.
+        if (engine != "Java") {
+            forgeVersions = emptyList()
+            loaderVersions = emptyList()
+            selectedForgeVersion = ""
+            selectedLoaderVersion = ""
+            loaderCatalogMessage = "Os modloaders Java não se aplicam ao motor Horizon."
+            return@LaunchedEffect
+        }
+
         // Capture the request key once. A cancelled request must never publish
         // results or errors belonging to a previous loader/version selection.
         val requestedVersion = selectedVersion
