@@ -408,8 +408,8 @@ internal fun minecraftLibraryApplies(
     for (index in 0 until rules.length()) {
         val rule = rules.optJSONObject(index) ?: continue
         val os = rule.optJSONObject("os")
-        val nameMatches = os?.optString("name").isNullOrNullOrEmpty() ||
-            os?.optString("name") == osName
+        val ruleOsName = os?.optString("name").orEmpty()
+        val nameMatches = ruleOsName.isBlank() || ruleOsName == osName
         val archPattern = os?.optString("arch").orEmpty()
         val archMatches = archPattern.isBlank() || runCatching {
             Regex(archPattern).containsMatchIn(osArch)
@@ -428,5 +428,3 @@ internal fun minecraftLibraryApplies(
     }
     return allowed
 }
-
-private fun String?.isNullOrNullOrEmpty(): Boolean = this.isNullOrEmpty()
