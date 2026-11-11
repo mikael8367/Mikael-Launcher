@@ -36,6 +36,14 @@ class MinecraftInstallerTest {
     }
 
     @Test
+    fun skipsOnlyDesktopWindowIconsOnAndroid() {
+        assertEquals(false, minecraftAssetRequiredOnAndroid("icons/icon_16x16.png"))
+        assertEquals(false, minecraftAssetRequiredOnAndroid("icons/icon_32x32.png"))
+        assertEquals(true, minecraftAssetRequiredOnAndroid("minecraft/lang/en_us.json"))
+        assertEquals(true, minecraftAssetRequiredOnAndroid("textures/blocks/stone.png"))
+    }
+
+    @Test
     fun resolvesStandardMavenCoordinates() {
         assertEquals(
             "com/google/guava/guava/21.0/guava-21.0.jar",
