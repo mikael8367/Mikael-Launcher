@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 class MinecraftInstallForegroundService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var notificationManager: NotificationManager
+    private var workerStarted = false
 
     override fun onCreate() {
         super.onCreate()
@@ -39,8 +40,10 @@ class MinecraftInstallForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // A repeated tap must not stop the already-running service/download.
-        if (MinecraftInstallSession.inProgress) return START_NOT_STICKY
+        // Service intents are serialized on the main thread. Ignore duplicate starts
+        // without confusing the process-wide UI state with this service's worker state.
+        if (workerStarted) return START_NOT_STICKY
+        workerStarted = true
         val notification = buildNotification("Preparando instalação…", null, null, true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
@@ -60,6 +63,7 @@ class MinecraftInstallForegroundService : Service() {
             )
         } catch (failure: Exception) {
             MinecraftInstallSession.failExternal("Dados da instalação inválidos: ${failure.message}")
+            workerStarted = false
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf(startId)
             return START_NOT_STICKY
@@ -78,6 +82,7 @@ class MinecraftInstallForegroundService : Service() {
                 MinecraftInstallSession.failExternal(failure.message ?: "Falha desconhecida durante a instalação.")
                 updateNotification("Falha na instalação", null, null, false)
             } finally {
+                workerStarted = false
                 stopForeground(STOP_FOREGROUND_DETACH)
                 stopSelf(startId)
             }
