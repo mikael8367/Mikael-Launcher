@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,6 +47,7 @@ import com.mikael.launcher.ui.theme.TextSecondary
 
 @Composable
 fun HorizonRustScreen() {
+    val uriHandler = LocalUriHandler.current
     var showInstallInfo by rememberSaveable { mutableStateOf(false) }
 
     Column(
@@ -69,7 +71,7 @@ fun HorizonRustScreen() {
             fontWeight = FontWeight.ExtraBold
         )
         Text(
-            "Uma experiência independente do motor Minecraft Java.",
+            "Minecraft Java 26.3 reimplementado em Rust, com motor separado do Java/FCL.",
             color = TextSecondary,
             fontSize = 12.sp
         )
@@ -136,7 +138,7 @@ fun HorizonRustScreen() {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "O Horizon Rust é tratado como um motor separado dentro do Mikael Launcher. Ele terá seus próprios arquivos, dependências, configurações e processo de instalação, sem misturar bibliotecas Java ou mods .jar.",
+                    "Projeto open source que reimplementa o Minecraft Java 26.3 em Rust. O motor é independente da JVM e não executa mods Java Forge/Fabric; utiliza o próprio sistema de mods Horizon.",
                     color = TextSecondary,
                     fontSize = 12.sp,
                     lineHeight = 18.sp
@@ -150,7 +152,7 @@ fun HorizonRustScreen() {
                         shape = RoundedCornerShape(30.dp)
                     ) {
                         Text(
-                            "PRÉ-ALPHA",
+                            "ANDROID EXPERIMENTAL",
                             color = AccentPurple,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
@@ -158,16 +160,22 @@ fun HorizonRustScreen() {
                         )
                     }
                     Text(
-                        "Instalador em desenvolvimento",
+                        "Sem pacote Android oficial disponível",
                         color = TextSecondary,
                         fontSize = 10.sp
                     )
                 }
                 AnimatedLauncherButton(
-                    text = "Instalar",
+                    text = "Verificar instalação",
                     onClick = { showInstallInfo = true },
                     modifier = Modifier.fillMaxWidth()
                 )
+                TextButton(
+                    onClick = { uriHandler.openUri("https://github.com/horizon-rust/horizon") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Abrir projeto oficial no GitHub")
+                }
             }
         }
 
@@ -180,15 +188,15 @@ fun HorizonRustScreen() {
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    "O que falta para instalar",
+                    "Compatibilidade Android: pendências",
                     color = TextPrimary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text("• Pacote oficial do motor e origem de download", color = TextSecondary, fontSize = 11.sp)
-                Text("• Instalador com verificação de integridade", color = TextSecondary, fontSize = 11.sp)
-                Text("• Verificação de compatibilidade ARM64/Vulkan", color = TextSecondary, fontSize = 11.sp)
-                Text("• Inicialização real e registro de logs", color = TextSecondary, fontSize = 11.sp)
+                Text("• Compilação nativa Android ARM64", color = TextSecondary, fontSize = 11.sp)
+                Text("• Integração JNI/Android e ciclo de vida", color = TextSecondary, fontSize = 11.sp)
+                Text("• Testes de Vulkan/GLES e entrada por toque", color = TextSecondary, fontSize = 11.sp)
+                Text("• Preparação de recursos, instalação e inicialização", color = TextSecondary, fontSize = 11.sp)
             }
         }
     }
@@ -196,10 +204,10 @@ fun HorizonRustScreen() {
     if (showInstallInfo) {
         AlertDialog(
             onDismissRequest = { showInstallInfo = false },
-            title = { Text("Horizon Rust ainda não está disponível") },
+            title = { Text("Instalação Android ainda indisponível") },
             text = {
                 Text(
-                    "A tela já está no launcher, mas o pacote instalável e o backend de instalação ainda precisam ser integrados. Nenhum arquivo será baixado nesta etapa."
+                    "O repositório oficial não oferece um pacote Android. A versão desktop não pode ser instalada diretamente no Android. Primeiro precisamos criar e testar uma compilação ARM64, adaptar gráficos, toque e ciclo de vida, e só então ativar o instalador. Nenhum arquivo será baixado agora."
                 )
             },
             confirmButton = {
