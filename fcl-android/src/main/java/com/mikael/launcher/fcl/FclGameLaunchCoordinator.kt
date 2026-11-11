@@ -13,6 +13,7 @@ import com.tungsten.fcl.util.JnaNatives
 import com.tungsten.fclcore.auth.offline.OfflineAccountFactory
 import com.tungsten.fclcore.download.MaintainTask
 import com.tungsten.fclcore.download.game.GameVerificationFixTask
+import com.tungsten.fclcore.util.LibFilter
 import com.tungsten.fclcore.task.Task
 import com.tungsten.fclcore.task.TaskExecutor
 import com.tungsten.fclcore.task.TaskListener
@@ -69,13 +70,16 @@ object FclGameLaunchCoordinator {
                 repository.getResolvedVersion(versionId)
             }
 
-            runTask(MaintainTask.maintain(repository, resolvedVersion))
-
+            // MaintainTask.maintain is synchronous and returns a patched Version;
+            // it is not a Task and must not be passed to TaskExecutor.
+            val maintainedVersion = withContext(Dispatchers.IO) {
+                MaintainTask.maintain(repository, resolvedVersion)
+            }
             val version = withContext(Dispatchers.IO) {
-                repository.getResolvedVersion(versionId)
+                LibFilter.filter(maintainedVersion, false)
             }
             val gameVersion = withContext(Dispatchers.IO) {
-                repository.getGameVersion(version).orElse(null)
+                repository.getGameVersion(maintainedVersion).orElse(null)
             }
             val verifyAbnormalLaunch = withContext(Dispatchers.IO) {
                 repository.unmarkVersionLaunchedAbnormally(versionId)
