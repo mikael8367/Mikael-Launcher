@@ -83,7 +83,6 @@ class MinecraftInstallerTest {
         assertEquals(true, minecraftLibraryApplies(library, "linux", "aarch64", "5.15.0"))
         assertEquals(false, minecraftLibraryApplies(library, "linux", "x86_64", "5.15.0"))
         assertEquals(false, minecraftLibraryApplies(library, "linux", "aarch64", "6.1.0"))
-        assertEquals(false, minecraftLibraryApplies(library, "linux", "aarch64", "6.1.0"))
     }
 
     @Test
