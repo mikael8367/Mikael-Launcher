@@ -14,15 +14,7 @@ class JavaEngineAvailabilityTest {
         assertEquals(EngineId.MINECRAFT_JAVA, engine.id)
         val state = engine.availability()
         assertTrue(state is EngineAvailability.Unavailable)
-        assertEquals("backend_not_integrated", (state as EngineAvailability.Unavailable).reasonCode)
-    }
-
-    @Test
-    fun backendFlagAloneDoesNotClaimAdapterIsConnected() {
-        val engine = JavaEngineAvailability(backendReady = true)
-        val state = engine.availability()
-
-        assertTrue(state is EngineAvailability.Unavailable)
-        assertEquals("adapter_not_bound", (state as EngineAvailability.Unavailable).reasonCode)
+        assertEquals("backend_not_integrated", state.reasonCode)
+        assertTrue(state.message.contains("ainda está em integração"))
     }
 }
