@@ -47,8 +47,8 @@ jobs:
           find fcl-native/build -type f -name '*.so' -print
           test -n "$(find fcl-native/build -type f -name 'libpojavexec.so' -print -quit)"
           test -n "$(find fcl-native/build -type f -name 'libfcl.so' -print -quit)"
-      - name: Run unit tests
-        run: gradle :app:testDebugUnitTest
+      - name: Run FCL runtime layout and app unit tests
+        run: gradle :fcl-android:testDebugUnitTest :app:testDebugUnitTest
 
   horizon-android-arm64:
     runs-on: ubuntu-latest
