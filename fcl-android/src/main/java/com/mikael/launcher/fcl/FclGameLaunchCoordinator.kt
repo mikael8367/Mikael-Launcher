@@ -2,8 +2,10 @@ package com.mikael.launcher.fcl
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import com.mio.JavaManager
+import com.mio.manager.RendererManager
 import com.tungsten.fcl.activity.JVMActivity
 import com.tungsten.fcl.control.MenuType
 import com.tungsten.fcl.game.FCLGameLauncher
@@ -19,6 +21,7 @@ import com.tungsten.fclcore.task.Task
 import com.tungsten.fclcore.task.TaskExecutor
 import com.tungsten.fclcore.task.TaskListener
 import com.tungsten.fclcore.util.versioning.VersionNumber
+import com.tungsten.fclcore.util.versioning.GameVersionNumber
 import org.lwjgl.glfw.CallbackBridge
 import java.io.File
 import java.nio.file.Files
@@ -52,15 +55,25 @@ object FclGameLaunchCoordinator {
     /** Pasta onde o FCL grava launcher.log e minecraft.log (para diagnóstico). */
     fun currentLogDirectory(): String? = runCatching { FCLPath.LOG_DIR }.getOrNull()
 
+    suspend fun installedVersionIds(context: Context): List<String> {
+        val appContext = context.applicationContext
+        val bootstrap = FclEngineBootstrap.initialize(appContext)
+        check(bootstrap.initialized) { bootstrap.message }
+        val profile = withContext(Dispatchers.IO) { Profiles.getSelectedProfile() }
+        return withContext(Dispatchers.IO) {
+            profile.repository.refreshVersions()
+            profile.repository.versions.map { it.id }.distinct().sorted()
+        }
+    }
+
     suspend fun launch(
         context: Context,
         versionId: String,
         username: String,
         preferences: FclLaunchPreferences = FclLaunchPreferences()
     ) {
-        require(context is Activity) {
-            "A inicialização precisa ser chamada a partir da tela do launcher."
-        }
+        val activity = context.findActivity()
+            ?: throw IllegalArgumentException("A inicialização precisa ser chamada a partir da tela do launcher.")
         require(versionId.isNotBlank()) {
             "Selecione uma versão instalada antes de iniciar."
         }
@@ -73,7 +86,7 @@ object FclGameLaunchCoordinator {
 
         try {
             stage("preparando serviços do FCL")
-            val appContext = context.applicationContext
+            val appContext = activity.applicationContext
             val bootstrap = FclEngineBootstrap.initialize(appContext)
             check(bootstrap.initialized) { bootstrap.message }
 
@@ -128,19 +141,38 @@ object FclGameLaunchCoordinator {
                     val javaRoot = FCLPath.JAVA_PATH?.takeIf { it.isNotBlank() }
                     javaRoot != null && File(javaRoot, folder).resolve("release").isFile
                 }
+            if (preferences.runtimeFolder != null && requestedRuntime == null) {
+                setting.java = "Auto"
+            }
             applyFclLaunchPreferences(setting, preferences.copy(runtimeFolder = requestedRuntime))
 
             stage("selecionando o runtime Java compatível")
-            val javaVersion = if (setting.java == "Auto") {
-                withContext(Dispatchers.IO) { JavaManager.getSuitableJavaVersion(version) }
-            } else {
-                withContext(Dispatchers.IO) { JavaManager.getJavaFromVersionName(setting.java) }
+            val javaVersion = withContext(Dispatchers.IO) {
+                val minimumCompatible = JavaManager.getSuitableJavaVersion(version)
+                check(minimumCompatible.getVersion() > 0) {
+                    "Não existe um runtime Java compatível instalado para esta versão."
+                }
+                val requested = if (setting.java == "Auto") {
+                    minimumCompatible
+                } else {
+                    JavaManager.getJavaFromVersionName(setting.java)
+                }
+                if (requested.getVersion() < minimumCompatible.getVersion()) {
+                    minimumCompatible
+                } else {
+                    requested
+                }
             }
+            setting.java = javaVersion.name
             check(javaVersion.getVersion() > 0) {
                 "Não existe um runtime Java compatível instalado para esta versão."
             }
             val javaHome = File(javaVersion.getJavaPath(version))
-            check(javaHome.resolve("release").isFile && javaHome.resolve("bin/java").isFile) {
+            check(
+                javaHome.resolve("release").isFile &&
+                    javaHome.resolve("bin/java").isFile &&
+                    javaHome.resolve("bin/java").canExecute()
+            ) {
                 "O runtime " + javaVersion.name + " está incompleto. Reinstale esse runtime nas configurações."
             }
 
@@ -153,12 +185,37 @@ object FclGameLaunchCoordinator {
             )
             val authInfo = withContext(Dispatchers.IO) { account.logIn() }
 
+            stage("validando o renderizador gráfico")
+            val selectedRendererId = rendererIdForLabel(preferences.rendererLabel)
+            if (selectedRendererId != null) {
+                profile.setRendererOverride(versionId, selectedRendererId)
+            }
+            val selectedRenderer = RendererManager.findRenderer(
+                profile.getEffectiveRendererOverride(versionId) ?: setting.renderer
+            ) ?: throw IllegalStateException(
+                "O renderizador selecionado não está registrado no FCL. Escolha GL4ES nas configurações."
+            )
+            val detectedGameVersion = GameVersionNumber.asGameVersion(gameVersion ?: versionId)
+            if (selectedRenderer.minMCver.isNotBlank()) {
+                check(detectedGameVersion.compareTo(selectedRenderer.minMCver) >= 0) {
+                    "${selectedRenderer.name} não suporta Minecraft $versionId; versão mínima: ${selectedRenderer.minMCver}."
+                }
+            }
+            if (selectedRenderer.maxMCver.isNotBlank()) {
+                check(detectedGameVersion.compareTo(selectedRenderer.maxMCver) <= 0) {
+                    "${selectedRenderer.name} não suporta Minecraft $versionId; versão máxima: ${selectedRenderer.maxMCver}."
+                }
+            }
+
             stage("montando os argumentos de inicialização")
             val launchOptions = withContext(Dispatchers.IO) {
                 repository.getLaunchOptions(versionId, javaVersion, profile.gameDir, 1.0, 0.0)
             }
+            check(launchOptions.renderer != null) {
+                "Nenhum renderizador compatível está selecionado para esta versão."
+            }
             val launcher = FCLGameLauncher(
-                context,
+                activity,
                 repository,
                 version,
                 authInfo,
@@ -187,7 +244,7 @@ object FclGameLaunchCoordinator {
                 stage("preparando natives do JNA")
                 withContext(Dispatchers.IO) {
                     launcher.setJnaVersion(versionName)
-                    JnaNatives.ensureNativeLibrary(context, versionName)
+                    JnaNatives.ensureNativeLibrary(activity, versionName)
                 }
             }
             lwjglVersion?.let(launcher::setLwjglVersion)
@@ -197,11 +254,8 @@ object FclGameLaunchCoordinator {
 
             stage("abrindo a tela do jogo")
             withContext(Dispatchers.Main) {
-                check(!context.isFinishing && !context.isDestroyed) {
+                check(!activity.isFinishing && !activity.isDestroyed) {
                     "A tela do launcher foi encerrada antes de abrir o Minecraft."
-                }
-                check(launchOptions.renderer != null) {
-                    "Nenhum renderizador compatível está selecionado para esta versão."
                 }
                 CallbackBridge.nativeSetUseInputStackQueue(version.arguments.isPresent)
                 bridge.scaleFactor = 1.0
@@ -211,16 +265,22 @@ object FclGameLaunchCoordinator {
                 bridge.renderer = launchOptions.renderer.name
                 JVMActivity.setFCLBridge(bridge, MenuType.GAME)
 
-                val intent = Intent(context, JVMActivity::class.java).apply {
+                val intent = Intent(activity, JVMActivity::class.java).apply {
                     putExtra("controller", setting.controller)
                     putExtra("TERRACOTTA_PLAYER", username)
                 }
-                context.startActivity(intent)
+                activity.startActivity(intent)
             }
             stage("jogo em execução")
         } finally {
             launching.set(false)
         }
+    }
+
+    private fun Context.findActivity(): Activity? = when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
     }
 
     private fun stage(description: String) {
