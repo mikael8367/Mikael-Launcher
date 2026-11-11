@@ -2,7 +2,7 @@ use jni::JNIEnv;
 use jni::objects::JClass;
 use jni::sys::{JNI_FALSE, JNI_TRUE, jboolean, jint, jlong, jstring};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,6 +13,8 @@ struct Session {
 
 static NEXT_HANDLE: AtomicI64 = AtomicI64::new(1);
 static SESSIONS: OnceLock<Mutex<HashMap<i64, Session>>> = OnceLock::new();
+static GPU_VALIDATED: AtomicBool = AtomicBool::new(false);
+static GPU_BACKEND: OnceLock<Mutex<String>> = OnceLock::new();
 
 fn sessions() -> &'static Mutex<HashMap<i64, Session>> {
     SESSIONS.get_or_init(|| Mutex::new(HashMap::new()))
@@ -69,7 +71,14 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
     mut env: JNIEnv,
     _class: JClass,
 ) -> jstring {
-    let capabilities = r#"{"abi":"arm64-v8a","jni":true,"nativeActivity":true,"winit":true,"wgpu":true,"graphicsApi":"auto","gpuValidated":false,"touchInput":false,"minecraftRuntime":false}"#;
+    let gpu_validated = GPU_VALIDATED.load(Ordering::Relaxed);
+    let backend = GPU_BACKEND
+        .get()
+        .and_then(|value| value.lock().ok().map(|value| value.clone()))
+        .unwrap_or_else(|| "not-tested".to_string());
+    let capabilities = format!(
+        r#"{{"abi":"arm64-v8a","jni":true,"nativeActivity":true,"winit":true,"wgpu":true,"graphicsBackend":"{backend}","gpuValidated":{gpu_validated},"touchInput":false,"minecraftRuntime":false}}"#
+    );
 
     env.new_string(capabilities)
         .map(|value| value.into_raw())
@@ -102,6 +111,7 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
 #[cfg(target_os = "android")]
 mod android_surface {
     use std::sync::Arc;
+    use std::time::{Duration, Instant};
     use winit::{
         application::ApplicationHandler,
         event::WindowEvent,
@@ -123,6 +133,7 @@ mod android_surface {
         window: Option<Arc<Window>>,
         gpu: Option<GpuState>,
         startup_error: Option<String>,
+        next_frame: Option<Instant>,
     }
 
     impl HorizonSurfaceApp {
@@ -149,6 +160,7 @@ mod android_surface {
             let (device, queue) =
                 pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
                     .map_err(|error| format!("Falha ao criar dispositivo gráfico: {error}"))?;
+            let adapter_backend = format!("{:?}", adapter.get_info().backend);
             let config = surface
                 .get_default_config(&adapter, size.width.max(1), size.height.max(1))
                 .ok_or_else(|| {
@@ -156,6 +168,11 @@ mod android_surface {
                         .to_string()
                 })?;
             surface.configure(&device, &config);
+            GPU_VALIDATED.store(true, Ordering::Relaxed);
+            let backend_store = GPU_BACKEND.get_or_init(|| Mutex::new(String::new()));
+            if let Ok(mut value) = backend_store.lock() {
+                *value = adapter_backend;
+            }
 
             self.window = Some(window.clone());
             self.gpu = Some(GpuState {
@@ -165,12 +182,12 @@ mod android_surface {
                 queue,
                 config,
             });
-            window.request_redraw();
+            self.next_frame = Some(Instant::now());
             Ok(())
         }
 
         fn draw(&mut self) {
-            let (Some(window), Some(gpu)) = (&self.window, &self.gpu) else {
+            let Some(gpu) = &self.gpu else {
                 return;
             };
             match gpu.surface.get_current_texture() {
@@ -216,7 +233,6 @@ mod android_surface {
                 | wgpu::CurrentSurfaceTexture::Occluded
                 | wgpu::CurrentSurfaceTexture::Validation => {}
             }
-            window.request_redraw();
         }
     }
 
@@ -229,6 +245,18 @@ mod android_surface {
                 self.startup_error = Some(error);
                 event_loop.exit();
             }
+        }
+
+        fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+            let now = Instant::now();
+            let next_frame = self.next_frame.get_or_insert(now);
+            if now >= *next_frame {
+                if let Some(window) = self.window.as_ref() {
+                    window.request_redraw();
+                }
+                *next_frame = now + Duration::from_millis(33);
+            }
+            event_loop.set_control_flow(ControlFlow::WaitUntil(*next_frame));
         }
 
         fn window_event(
