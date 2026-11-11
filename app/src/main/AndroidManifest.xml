@@ -24,6 +24,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".HorizonNativeActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="false"
+            android:screenOrientation="landscape">
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="horizon_android" />
+        </activity>
         <!-- Do not expose the upstream FCL launcher UI; Mikael Launcher owns the entry screen. -->
         <activity android:name="com.tungsten.fcl.activity.SplashActivity" tools:node="remove" />
         <activity android:name="com.tungsten.fcl.activity.MainActivity" tools:node="remove" />
