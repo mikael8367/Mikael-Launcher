@@ -34,6 +34,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.14.4"
+      - name: Verify filtered ARM64 Java runtime assets
+        run: gradle :fcl-android:verifyFclArm64JreAssets
       - name: Compile FCL Android engine sources
         run: gradle :fcl-android:compileDebugKotlin
       - name: Compile Android Kotlin sources
