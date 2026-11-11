@@ -49,6 +49,7 @@ internal fun GameStorageLocationPanel() {
     var entries by remember { mutableStateOf<List<String>>(emptyList()) }
     var hasFileAccess by remember { mutableStateOf(checkFileAccess(context)) }
     var applyingFolder by remember { mutableStateOf(false) }
+    var migrating by remember { mutableStateOf(false) }
 
     fun applyFclDirectory() {
         if (selectedUri != null && !checkFileAccess(context)) {
@@ -159,6 +160,25 @@ internal fun GameStorageLocationPanel() {
                 applyFclDirectory()
             }) { Text("Usar padrão") }
         }
+        OutlinedButton(
+            enabled = !migrating && !applyingFolder,
+            onClick = {
+                migrating = true
+                scope.launch {
+                    try {
+                        val result = GameStorageMigration.migrate(context)
+                        val megabytes = result.copiedBytes / (1024L * 1024L)
+                        status = "Migração concluída: " + result.copiedFiles + " arquivos copiados, " + result.skippedFiles + " já existentes ignorados (" + megabytes + " MB)."
+                        applyFclDirectory()
+                        refresh(selectedUri)
+                    } catch (error: Exception) {
+                        status = error.message ?: "Falha ao migrar os arquivos antigos."
+                    } finally {
+                        migrating = false
+                    }
+                }
+            }
+        ) { Text(if (migrating) "Migrando arquivos..." else "Migrar versões e arquivos existentes") }
         Text("Conteúdo reconhecido", color = TextPrimary, fontSize = 11.sp)
         entries.forEach { Text("• $it", color = TextSecondary, fontSize = 10.sp) }
         Text("A pasta selecionada agora é usada pelo instalador Vanilla, Fabric/Quilt e pelo diretório ativo do FCL. No Android 11+, conceda também Acesso a todos os arquivos. Pastas de nuvem e diretórios protegidos do Android não servem como diretório de jogo.", color = TextSecondary, fontSize = 10.sp)
