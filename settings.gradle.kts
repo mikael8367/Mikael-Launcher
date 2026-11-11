@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "MikaelLauncher"
-include(":app")
+include(":app", ":fcl-native")
