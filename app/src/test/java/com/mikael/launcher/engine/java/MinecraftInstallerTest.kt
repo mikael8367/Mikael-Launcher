@@ -70,4 +70,38 @@ class MinecraftInstallerTest {
         assertEquals(0f, MinecraftInstallProgress("test", 0, 0, "").fraction)
         assertEquals(0.5f, MinecraftInstallProgress("test", 2, 4, "asset").fraction)
     }
+
+    @Test
+    fun evaluatesOrderedOsRulesAndLastMatchingRuleWins() {
+        val library = JSONObject(
+            """{"rules":[
+                {"action":"allow"},
+                {"action":"disallow","os":{"name":"windows"}},
+                {"action":"allow","os":{"name":"linux","arch":"aarch64","version":"^5\\\\."}}
+            ]}"""
+        )
+        assertEquals(true, minecraftLibraryApplies(library, "linux", "aarch64", "5.15.0"))
+        assertEquals(false, minecraftLibraryApplies(library, "linux", "x86_64", "5.15.0"))
+        assertEquals(false, minecraftLibraryApplies(library, "linux", "aarch64", "6.1.0"))
+    }
+
+    @Test
+    fun matchesFeatureRulesAgainstProvidedFeatureContext() {
+        val library = JSONObject(
+            """{"rules":[{"action":"allow","features":{"is_demo_user":true}}]}"""
+        )
+        assertEquals(false, minecraftLibraryApplies(library, "linux", "aarch64", "5.15"))
+        assertEquals(
+            true,
+            minecraftLibraryApplies(
+                library, "linux", "aarch64", "5.15",
+                mapOf("is_demo_user" to true)
+            )
+        )
+    }
+
+    @Test
+    fun defaultsLibrariesWithoutRulesToAllowed() {
+        assertEquals(true, minecraftLibraryApplies(JSONObject("""{"name":"org.example:demo:1.0"}"""), "linux", "aarch64", "5.15"))
+    }
 }
