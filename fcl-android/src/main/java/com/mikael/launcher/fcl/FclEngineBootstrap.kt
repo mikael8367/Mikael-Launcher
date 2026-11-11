@@ -72,6 +72,14 @@ object FclEngineBootstrap {
                 // classes. It must be initialized before those classes are touched.
                 FCLPath.loadPaths(appContext)
 
+                // The selected SAF directory is resolved to a real local filesystem
+                // path because FCL's game repository and Minecraft process use java.io.File.
+                val selectedGameDirectory = FclGameDirectoryResolver.resolve(appContext).canonicalFile
+                if (!selectedGameDirectory.exists() && !selectedGameDirectory.mkdirs()) {
+                    throw IllegalStateException("Não foi possível criar a pasta selecionada do Minecraft.")
+                }
+                FCLPath.PRIVATE_COMMON_DIR = selectedGameDirectory.absolutePath
+
                 // The pinned FCL upstream defaults several directories to /sdcard/FCL.
                 // On Android 11+ this requires broad all-files access, which this
                 // launcher deliberately does not request. Redirect these paths to
@@ -110,6 +118,17 @@ object FclEngineBootstrap {
                     ConfigHolder.init()
                 }
                 Controllers.init()
+
+                // Route the currently selected FCL profile to the same directory
+                // used by the version/mod-loader installers. Profile.gameDir is mutable
+                // and its setter switches the repository and persists the profile.
+                val activeProfile = runCatching { Profiles.getSelectedProfile() }.getOrNull()
+                if (activeProfile != null &&
+                    runCatching { activeProfile.gameDir.canonicalFile != selectedGameDirectory }.getOrDefault(true)
+                ) {
+                    activeProfile.gameDir = selectedGameDirectory
+                    Profiles.setSelectedProfile(activeProfile)
+                }
 
                 // A brand-new FCL profile defaults to shared external storage.
                 // Choose its app-private profile once, so first launch does not
