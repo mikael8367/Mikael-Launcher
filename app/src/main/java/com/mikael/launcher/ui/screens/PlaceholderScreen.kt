@@ -29,6 +29,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import com.mikael.launcher.engine.java.MinecraftInstaller
+import com.mikael.launcher.fcl.FclGameDirectoryResolver
 import com.mikael.launcher.engine.java.MinecraftInstallProgress
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.text.BasicTextField
@@ -285,7 +286,7 @@ private fun VersionsScreen() {
             loaderCatalogMessage = "Consultando versões compatíveis..."
             try {
                 val releases = com.mikael.launcher.engine.java.ModLoaderProfileInstaller(
-                    context.filesDir.resolve("minecraft")
+                    FclGameDirectoryResolver.resolve(context)
                 ).availableVersions(selectedVersion, backend)
                 loaderVersions = releases
                 selectedLoaderVersion = releases.firstOrNull()?.version.orEmpty()
