@@ -25,7 +25,7 @@ data class MinecraftInstallProgress(
 data class MinecraftInstallResult(
     val versionId: String,
     val gameDirectory: File,
-    val downloadedFiles: Int
+    val completedFiles: Int
 )
 
 /**
