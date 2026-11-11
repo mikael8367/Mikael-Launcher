@@ -52,7 +52,12 @@ object FclGameLaunchCoordinator {
     /** Pasta onde o FCL grava launcher.log e minecraft.log (para diagnóstico). */
     fun currentLogDirectory(): String? = runCatching { FCLPath.LOG_DIR }.getOrNull()
 
-    suspend fun launch(context: Context, versionId: String, username: String) {
+    suspend fun launch(
+        context: Context,
+        versionId: String,
+        username: String,
+        preferences: FclLaunchPreferences = FclLaunchPreferences()
+    ) {
         require(context is Activity) {
             "A inicialização precisa ser chamada a partir da tela do launcher."
         }
@@ -113,8 +118,19 @@ object FclGameLaunchCoordinator {
             unpackBuiltinJar(appContext, "/assets/game/MioLibPatcher.jar", FCLPath.LIB_PATCHER_PATH)
             unpackBuiltinJar(appContext, "/assets/game/MioLaunchWrapper.jar", FCLPath.MIO_LAUNCH_WRAPPER)
 
-            stage("selecionando o runtime Java compatível")
+            stage("aplicando preferências de runtime, renderizador e memória")
             val setting = profile.getVersionSetting(versionId)
+            // Só aponta setting.java para o runtime escolhido se ele realmente
+            // estiver instalado; caso contrário mantém "Auto" e deixa o FCL
+            // escolher o runtime compatível disponível.
+            val requestedRuntime = preferences.runtimeFolder
+                ?.takeIf { folder ->
+                    val javaRoot = FCLPath.JAVA_PATH?.takeIf { it.isNotBlank() }
+                    javaRoot != null && File(javaRoot, folder).resolve("release").isFile
+                }
+            applyFclLaunchPreferences(setting, preferences.copy(runtimeFolder = requestedRuntime))
+
+            stage("selecionando o runtime Java compatível")
             val javaVersion = if (setting.java == "Auto") {
                 withContext(Dispatchers.IO) { JavaManager.getSuitableJavaVersion(version) }
             } else {
