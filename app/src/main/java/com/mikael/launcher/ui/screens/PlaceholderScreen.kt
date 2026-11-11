@@ -420,6 +420,7 @@ private fun VersionsScreen() {
         val installCatalog = catalog.toList()
         val installedProfiles = profiles.toList()
         val applicationContext = context.applicationContext
+        MinecraftInstallSession.beginExternal()
         try {
             com.mikael.launcher.engine.java.MinecraftInstallForegroundService.start(
                 context = applicationContext,
@@ -436,7 +437,7 @@ private fun VersionsScreen() {
                 installedProfiles = installedProfiles
             )
         } catch (failure: Exception) {
-            MinecraftInstallSession.reportError(
+            MinecraftInstallSession.failExternal(
                 failure.message ?: "Não foi possível iniciar o serviço de instalação em segundo plano."
             )
         }
