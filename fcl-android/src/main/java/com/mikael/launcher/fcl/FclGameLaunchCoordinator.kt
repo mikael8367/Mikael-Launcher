@@ -26,6 +26,7 @@ import org.lwjgl.glfw.CallbackBridge
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.util.jar.JarFile
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +73,7 @@ object FclGameLaunchCoordinator {
         username: String,
         preferences: FclLaunchPreferences = FclLaunchPreferences()
     ) {
+        stage("validando solicitação de inicialização")
         val activity = context.findActivity()
             ?: throw IllegalArgumentException("A inicialização precisa ser chamada a partir da tela do launcher.")
         require(versionId.isNotBlank()) {
@@ -195,7 +197,7 @@ object FclGameLaunchCoordinator {
             ) ?: throw IllegalStateException(
                 "O renderizador selecionado não está registrado no FCL. Escolha GL4ES nas configurações."
             )
-            val detectedGameVersion = GameVersionNumber.asGameVersion(gameVersion ?: versionId)
+            val detectedGameVersion = GameVersionNumber.asGameVersion(gameVersion ?: versionId.substringBefore('-'))
             if (selectedRenderer.minMCver.isNotBlank()) {
                 check(detectedGameVersion.compareTo(selectedRenderer.minMCver) >= 0) {
                     "${selectedRenderer.name} não suporta Minecraft $versionId; versão mínima: ${selectedRenderer.minMCver}."
@@ -298,7 +300,10 @@ object FclGameLaunchCoordinator {
         val target = File(targetPath)
         val parent = target.parentFile
             ?: throw IllegalStateException("Caminho inválido para biblioteca interna do FCL: $targetPath")
-        if (target.isFile && target.length() > 0L) return
+        if (target.isFile && target.length() > 0L && runCatching {
+                JarFile(target).use { it.entries().hasMoreElements() }
+            }.getOrDefault(false)
+        ) return
         if (!parent.exists() && !parent.mkdirs()) {
             throw IllegalStateException("Não foi possível criar a pasta de bibliotecas internas do FCL.")
         }
@@ -316,6 +321,11 @@ object FclGameLaunchCoordinator {
                 Files.copy(input, temp.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
             check(temp.length() > 0L) { "Biblioteca interna do FCL vazia: ${target.name}" }
+            JarFile(temp).use { jar ->
+                check(jar.entries().hasMoreElements()) {
+                    "Biblioteca interna do FCL inválida: ${target.name}"
+                }
+            }
             try {
                 Files.move(
                     temp.toPath(),
