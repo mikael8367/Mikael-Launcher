@@ -17,7 +17,8 @@ import kotlin.coroutines.resumeWithException
 enum class FclModLoader(val patchId: String, val componentType: GameComponentType) {
     FORGE("forge", GameComponentType.FORGE),
     NEOFORGE("neoforge", GameComponentType.NEO_FORGE),
-    OPTIFINE("optifine", GameComponentType.OPTIFINE)
+    OPTIFINE("optifine", GameComponentType.OPTIFINE),
+    FORGE_OPTIFINE("forge-optifine", GameComponentType.FORGE)
 }
 
 data class FclModLoaderRelease(
@@ -58,6 +59,66 @@ object FclModLoaderInstaller {
                 )
             }
             .distinctBy { it.version }
+    }
+
+    suspend fun installForgeOptiFine(
+        context: Context,
+        minecraftVersion: String,
+        forgeVersion: String,
+        optiFineVersion: String
+    ): FclModLoaderInstallResult = withContext(Dispatchers.IO) {
+        requireSafeMinecraftVersion(minecraftVersion)
+        require(forgeVersion.isNotBlank() && forgeVersion.length <= 100)
+        require(optiFineVersion.isNotBlank() && optiFineVersion.length <= 100)
+        ensureFclReady(context)
+        val profile = Profiles.getSelectedProfile()
+        val selectedDirectory = alignProfileDirectory(context, profile)
+        val dependency = profile.getDependency()
+
+        val forgeList = dependency.getVersionList(GameComponentType.FORGE)
+        awaitTask(forgeList.loadAsync(minecraftVersion))
+        val forgeRemote = forgeList.getVersion(minecraftVersion, forgeVersion)
+            .orElseThrow { IllegalArgumentException("Forge $forgeVersion não é compatível com Minecraft $minecraftVersion.") }
+
+        val optiFineList = dependency.getVersionList(GameComponentType.OPTIFINE)
+        awaitTask(optiFineList.loadAsync(minecraftVersion))
+        val optiFineRemote = optiFineList.getVersion(minecraftVersion, optiFineVersion)
+            .orElseThrow { IllegalArgumentException("OptiFine $optiFineVersion não é compatível com Minecraft $minecraftVersion.") }
+
+        val profileId = "$minecraftVersion-forge-$forgeVersion-optifine-$optiFineVersion"
+            .replace(Regex("[^A-Za-z0-9_.-]"), "-")
+            .take(180)
+        require(FCLGameRepository.isValidVersionId(profileId)) {
+            "O identificador gerado para o perfil combinado não é aceito pelo FCL."
+        }
+        require(!profile.repository.versionIdConflicts(profileId) && !File(selectedDirectory, "versions/$profileId").exists()) {
+            "O perfil $profileId já existe."
+        }
+
+        // OptiFineInstallTask explicitly expects a Forge launch wrapper. Install Forge first,
+        // then apply OptiFine to that in-memory patched version and persist only the final profile.
+        val buildTask = dependency.gameBuilder()
+            .name(profileId)
+            .gameVersion(minecraftVersion)
+            .buildAsync()
+            .thenComposeAsync { baseVersion ->
+                dependency.installLibraryAsync(baseVersion, forgeRemote)
+            }
+            .thenComposeAsync { forgePatchedVersion ->
+                dependency.installLibraryAsync(forgePatchedVersion, optiFineRemote)
+            }
+            .thenComposeAsync { combinedVersion ->
+                profile.repository.saveAsync(combinedVersion)
+            }
+        awaitTask(buildTask)
+
+        profile.repository.refreshVersions()
+        require(profile.repository.hasVersion(profileId)) {
+            "O instalador terminou, mas o FCL não encontrou o perfil Forge + OptiFine salvo."
+        }
+        profile.selectedVersion = profileId
+        Profiles.setSelectedProfile(profile)
+        FclModLoaderInstallResult(profileId, minecraftVersion, FclModLoader.FORGE_OPTIFINE, "$forgeVersion + $optiFineVersion")
     }
 
     suspend fun install(
