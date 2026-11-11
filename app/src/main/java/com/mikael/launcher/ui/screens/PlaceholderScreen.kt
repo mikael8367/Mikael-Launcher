@@ -82,9 +82,6 @@ import com.mikael.launcher.ui.theme.Surface as PanelSurface
 import com.mikael.launcher.ui.theme.SurfaceRaised
 import com.mikael.launcher.ui.theme.TextPrimary
 import com.mikael.launcher.ui.theme.TextSecondary
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 /**
  * Sessão de instalação com escopo de processo. A instalação do Minecraft pode
@@ -102,36 +99,30 @@ internal object MinecraftInstallSession {
     var finishedProfileId by mutableStateOf<String?>(null)
         private set
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-    /** Executa a instalação fora da composição. Ignora chamadas concorrentes. */
-    fun start(work: suspend () -> String) {
+    fun beginExternal() {
         if (inProgress) return
         inProgress = true
         error = null
         progress = null
-        scope.launch {
-            try {
-                finishedProfileId = work()
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Exception) {
-                error = failure.message ?: "Falha desconhecida durante a instalação."
-            } finally {
-                inProgress = false
-            }
-        }
+        finishedProfileId = null
     }
 
-    /** Consome o perfil concluído (chamar uma única vez a partir da UI). */
+    fun completeExternal(profileId: String) {
+        finishedProfileId = profileId
+        inProgress = false
+    }
+
+    fun failExternal(message: String) {
+        error = message
+        inProgress = false
+    }
+
     fun consumeResult(): String? = finishedProfileId.also { finishedProfileId = null }
 
-    /** Registra um erro de validação detectado na UI antes de iniciar. */
     fun reportError(message: String) {
         error = message
     }
 
-    /** Publica o progresso vindo dos instaladores (chamado no callback deles). */
     fun reportProgress(value: MinecraftInstallProgress?) {
         progress = value
     }
@@ -392,86 +383,62 @@ private fun VersionsScreen() {
         }
     }
 
-    fun saveProfiles(updated: List<String>, selected: String) {
-        profiles = updated.distinct()
-        selectedProfile = selected
-        prefs.edit()
-            .putString("launcher_installed_version_profiles", profiles.joinToString("\n"))
-            .putString("launcher_selected_version_profile", selectedProfile)
-            .apply()
-    }
 
     LaunchedEffect(MinecraftInstallSession.finishedProfileId) {
         val finished = MinecraftInstallSession.finishedProfileId ?: return@LaunchedEffect
         installedVersion = finished
+        profiles = (profiles + finished).distinct()
+        selectedProfile = finished
+        prefs.edit()
+            .putString("launcher_installed_version_profiles", profiles.joinToString("\n"))
+            .putString("launcher_selected_version_profile", selectedProfile)
+            .apply()
         showInfo = true
         MinecraftInstallSession.consumeResult()
     }
 
     fun startInstall() {
         if (MinecraftInstallSession.inProgress) return
-        val installable = selectedLoader == "Vanilla" ||
-            (selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine") && selectedLoaderVersion.isNotBlank()) ||
-            (selectedLoader == "Forge + OptiFine" && selectedForgeVersion.isNotBlank() && selectedLoaderVersion.isNotBlank())
-        if (!installable) {
-            MinecraftInstallSession.reportError("$selectedLoader não possui um instalador compatível disponível para esta versão.")
+
+        // Freeze every user choice before the background task starts. The worker
+        // must not read Compose state again after the UI has moved on.
+        val request = try {
+            com.mikael.launcher.engine.java.createModLoaderInstallRequest(
+                minecraftVersion = selectedVersion,
+                loader = selectedLoader,
+                loaderVersion = selectedLoaderVersion,
+                forgeVersion = selectedForgeVersion
+            )
+        } catch (error: IllegalArgumentException) {
+            MinecraftInstallSession.reportError(error.message ?: "Seleção de modloader inválida.")
             return
         }
+        val installVersion = request.minecraftVersion
+        val installLoader = request.loader
+        val installLoaderVersion = request.loaderVersion
+        val installForgeVersion = request.forgeVersion
+        val installCatalog = catalog.toList()
+        val installedProfiles = profiles.toList()
         val applicationContext = context.applicationContext
-        MinecraftInstallSession.start {
-            val entry = catalog.firstOrNull { it.id == selectedVersion }
-                ?: error("A versão selecionada não está disponível no catálogo oficial.")
-            if (selectedLoader == "Forge + OptiFine") {
-                val forgeVersion = selectedForgeVersion.takeIf { it.isNotBlank() }
-                    ?: error("Selecione uma versão de Forge compatível.")
-                val optiFineVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
-                    ?: error("Selecione uma versão de OptiFine compatível.")
-                val result = com.mikael.launcher.fcl.FclModLoaderInstaller.installForgeOptiFine(
-                    applicationContext, entry.id, forgeVersion, optiFineVersion
-                )
-                saveProfiles(profiles + result.profileId, result.profileId)
-                result.profileId
-            } else if (selectedLoader in setOf("Forge", "NeoForge", "OptiFine")) {
-                val backend = when (selectedLoader) {
-                    "Forge" -> com.mikael.launcher.fcl.FclModLoader.FORGE
-                    "NeoForge" -> com.mikael.launcher.fcl.FclModLoader.NEOFORGE
-                    else -> com.mikael.launcher.fcl.FclModLoader.OPTIFINE
-                }
-                val loaderVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
-                    ?: error("Não há uma versão compatível de $selectedLoader selecionada.")
-                val result = com.mikael.launcher.fcl.FclModLoaderInstaller.install(
-                    applicationContext, entry.id, backend, loaderVersion
-                )
-                saveProfiles(profiles + result.profileId, result.profileId)
-                result.profileId
-            } else {
-                val gameDir = FclGameDirectoryResolver.resolve(applicationContext)
-                MinecraftInstaller(gameDir).install(
-                    versionId = entry.id,
-                    metadataUrl = entry.url,
-                    metadataSha1 = entry.sha1
-                ) { progress ->
-                    MinecraftInstallSession.reportProgress(progress)
-                }
-                if (selectedLoader == "Vanilla") {
-                    com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(applicationContext, entry.id)
-                    saveProfiles(profiles + entry.id, entry.id)
-                    entry.id
-                } else {
-                    val backend = when (selectedLoader) {
-                        "Fabric" -> com.mikael.launcher.engine.java.SupportedProfileLoader.FABRIC
-                        "Quilt" -> com.mikael.launcher.engine.java.SupportedProfileLoader.QUILT
-                        else -> error("O instalador real de $selectedLoader ainda não está integrado.")
-                    }
-                    val loaderVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
-                        ?: error("Não há uma versão compatível de $selectedLoader selecionada.")
-                    val result = com.mikael.launcher.engine.java.ModLoaderProfileInstaller(gameDir)
-                        .install(entry.id, backend, loaderVersion)
-                    com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(applicationContext, result.profileId)
-                    saveProfiles(profiles + result.profileId, result.profileId)
-                    result.profileId
-                }
-            }
+        try {
+            com.mikael.launcher.engine.java.MinecraftInstallForegroundService.start(
+                context = applicationContext,
+                minecraftVersion = installVersion,
+                metadataUrl = installCatalog.firstOrNull { it.id == installVersion }?.url
+                    ?: run {
+                        MinecraftInstallSession.reportError("A versão selecionada não está disponível no catálogo oficial.")
+                        return
+                    },
+                metadataSha1 = installCatalog.first { it.id == installVersion }.sha1,
+                loader = installLoader,
+                loaderVersion = installLoaderVersion,
+                forgeVersion = installForgeVersion,
+                installedProfiles = installedProfiles
+            )
+        } catch (failure: Exception) {
+            MinecraftInstallSession.reportError(
+                failure.message ?: "Não foi possível iniciar o serviço de instalação em segundo plano."
+            )
         }
     }
 
