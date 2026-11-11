@@ -2,8 +2,10 @@ package com.mikael.launcher.fcl
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import com.mio.JavaManager
+import com.mio.manager.RendererManager
 import com.tungsten.fcl.activity.JVMActivity
 import com.tungsten.fcl.control.MenuType
 import com.tungsten.fcl.game.FCLGameLauncher
@@ -45,9 +47,8 @@ object FclGameLaunchCoordinator {
         username.matches(Regex("[A-Za-z0-9_]{1,16}"))
 
     suspend fun launch(context: Context, versionId: String, username: String) {
-        require(context is Activity) {
-            "A inicialização precisa ser chamada a partir da tela do launcher."
-        }
+        val activity = context.findActivity()
+            ?: throw IllegalArgumentException("A inicialização precisa ser chamada a partir da tela do launcher.")
         require(versionId.isNotBlank()) {
             "Selecione uma versão instalada antes de iniciar."
         }
@@ -59,7 +60,7 @@ object FclGameLaunchCoordinator {
         }
 
         try {
-            val appContext = context.applicationContext
+            val appContext = activity.applicationContext
             val bootstrap = FclEngineBootstrap.initialize(appContext)
             check(bootstrap.initialized) { bootstrap.message }
 
@@ -100,19 +101,65 @@ object FclGameLaunchCoordinator {
             unpackBuiltinJar("/assets/game/MioLibPatcher.jar", FCLPath.LIB_PATCHER_PATH)
             unpackBuiltinJar("/assets/game/MioLaunchWrapper.jar", FCLPath.MIO_LAUNCH_WRAPPER)
 
-            val setting = profile.getVersionSetting(versionId)
+            // Apply the launcher's real runtime, renderer and memory preferences to
+            // a per-version FCL setting. Creating a local setting prevents one version
+            // from silently changing the global configuration of every other profile.
+            val setting = withContext(Dispatchers.IO) {
+                profile.repository.createLocalVersionSetting(versionId)
+                    ?: error("Não foi possível criar as configurações da versão $versionId.")
+            }
+            setting.isUsesGlobal = false
+
+            val preferences = appContext.getSharedPreferences(
+                "mikael_launcher_preferences",
+                Context.MODE_PRIVATE
+            )
+            val preferredRuntimeName = when (
+                preferences.getString("selected_java_runtime", "Java 8").orEmpty()
+            ) {
+                "Java 8" -> "jre8"
+                "Java 17" -> "jre17"
+                "Java 21" -> "jre21"
+                "Java 25" -> "jre25"
+                else -> "Auto"
+            }
             val javaVersion = withContext(Dispatchers.Main) {
-                if (setting.java == "Auto") {
-                    JavaManager.getSuitableJavaVersion(version)
-                } else {
-                    JavaManager.getJavaFromVersionName(setting.java)
+                val compatible = JavaManager.getSuitableJavaVersion(version)
+                check(compatible.getVersion() > 0) {
+                    "Não há runtime Java instalado compatível com Minecraft $versionId. Instale o Java recomendado nas configurações."
                 }
+                val preferred = JavaManager.getJavaFromVersionName(preferredRuntimeName)
+                if (preferred.getVersion() == compatible.getVersion()) preferred else compatible
             }
-            check(javaVersion.getVersion() > 0) {
-                "Não existe um runtime Java compatível instalado para esta versão."
+            setting.java = javaVersion.name
+
+            val rendererPreference = preferences.getString("selected_renderer", "GL4ES").orEmpty()
+            val renderer = when (rendererPreference) {
+                "GL4ES" -> RendererManager.RENDERER_GL4ES
+                "Zink" -> RendererManager.RENDERER_ZINK
+                "VirGL" -> RendererManager.RENDERER_VGPU
+                else -> throw IllegalStateException(
+                    "O renderizador $rendererPreference ainda não está disponível no motor FCL. Selecione GL4ES, Zink ou VirGL nas configurações."
+                )
             }
+            check(RendererManager.findRenderer(renderer.id) != null) {
+                "O renderizador $rendererPreference não foi registrado pelo FCL."
+            }
+            setting.renderer = renderer.id
+            profile.setRendererOverride(versionId, null)
+
+            val maxMemoryMb = preferences.getString("selected_ram_limit", "2048 MB")
+                .orEmpty().substringBefore(' ').toIntOrNull()?.coerceIn(512, 4096) ?: 2048
+            setting.maxMemory = maxMemoryMb
+            setting.isAutoMemory = false
+            setting.javaArgs = preferences.getString("selected_jvm_arguments", "").orEmpty().take(2048)
+
             val javaHome = File(javaVersion.getJavaPath(version))
-            check(javaHome.resolve("release").isFile && javaHome.resolve("bin/java").isFile) {
+            check(
+                javaHome.resolve("release").isFile &&
+                    javaHome.resolve("bin/java").isFile &&
+                    javaHome.resolve("bin/java").canExecute()
+            ) {
                 "O runtime " + javaVersion.name + " está incompleto. Reinstale esse runtime nas configurações."
             }
 
@@ -156,19 +203,19 @@ object FclGameLaunchCoordinator {
             jnaVersion?.let { versionName ->
                 withContext(Dispatchers.IO) {
                     launcher.setJnaVersion(versionName)
-                    JnaNatives.ensureNativeLibrary(context, versionName)
+                    JnaNatives.ensureNativeLibrary(activity, versionName)
                 }
             }
             lwjglVersion?.let(launcher::setLwjglVersion)
 
+            check(launchOptions.renderer != null) {
+                "Nenhum renderizador compatível está selecionado para esta versão."
+            }
             val bridge = withContext(Dispatchers.IO) { launcher.launch() }
 
             withContext(Dispatchers.Main) {
-                check(!context.isFinishing && !context.isDestroyed) {
+                check(!activity.isFinishing && !activity.isDestroyed) {
                     "A tela do launcher foi encerrada antes de abrir o Minecraft."
-                }
-                check(launchOptions.renderer != null) {
-                    "Nenhum renderizador compatível está selecionado para esta versão."
                 }
                 CallbackBridge.nativeSetUseInputStackQueue(version.arguments.isPresent)
                 bridge.scaleFactor = 1.0
@@ -182,11 +229,17 @@ object FclGameLaunchCoordinator {
                     putExtra("controller", setting.controller)
                     putExtra("TERRACOTTA_PLAYER", username)
                 }
-                context.startActivity(intent)
+                activity.startActivity(intent)
             }
         } finally {
             launching.set(false)
         }
+    }
+
+    private fun Context.findActivity(): Activity? = when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
     }
 
     private fun unpackBuiltinJar(resourcePath: String, targetPath: String) {
