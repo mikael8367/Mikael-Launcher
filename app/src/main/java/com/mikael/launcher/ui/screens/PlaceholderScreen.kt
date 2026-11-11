@@ -86,6 +86,7 @@ import com.mikael.launcher.ui.theme.TextSecondary
 fun PlaceholderScreen(section: LauncherSection) {
     when (section) {
         LauncherSection.PLAY -> PlayScreen()
+        LauncherSection.HORIZON_RUST -> HorizonRustScreen()
         LauncherSection.VERSIONS -> VersionsScreen()
         LauncherSection.MODS -> ModCatalogScreen()
         LauncherSection.DOWNLOADS -> DownloadsScreen()
