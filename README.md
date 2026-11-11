@@ -5,7 +5,7 @@ Launcher Android de Minecraft com interface horizontal, navegação lateral e id
 ## Estado do projeto
 
 **Versão:** 0.1.0-alpha  
-**Etapa atual:** interface interativa
+**Etapa atual:** interface interativa + instalador inicial de versões oficiais do Minecraft Java
 
 A interface inclui navegação entre as áreas principais, seleção visual de motor/perfil, gerenciamento visual de instalações, abas e ações para contas, mods, pacotes de recursos, shaders, mundos, downloads, desempenho e diagnóstico. O seletor de arquivos Android está disponível para a futura importação.
 
@@ -19,12 +19,12 @@ A interface inclui navegação entre as áreas principais, seleção visual de m
 
 ## Limites importantes desta etapa
 - Selecionar Java/Horizon e um perfil não inicia o jogo ainda.
-- Selecionar uma versão não baixa nem instala o Minecraft.
+- O instalador de versões oficiais já baixa o client JAR, bibliotecas aplicáveis, classificadores nativos, índice/objetos de assets e configuração de logging. Isso prepara os arquivos, mas ainda não inicia o jogo.
 - O seletor de arquivos abre o seletor do Android, mas a importação/cópia e validação de mods ainda não foram implementadas.
 - Atualizar na área Downloads atualiza o estado da tela; não consulta uma fila de downloads real.
 - Preferências ainda são locais à tela e não são aplicadas aos motores.
 - Os botões de adicionar/editar/duplicar/excluir instalações, loader, runtime, RAM, argumentos JVM, contas, mundos, shaders, pacotes, fila de downloads, desempenho e logs já estão representados na interface; as operações reais serão ligadas em etapas próprias.
-- Login Microsoft/Offline/Ely.by, motores Java e Horizon, instalação, downloads reais e gerenciamento persistente de mods ainda não executam operações reais nesta fase.
+- Login Microsoft/Ely.by, motor Java executável, motor Horizon, gerenciamento persistente de mods, instalação de loaders e gerenciamento real de mundos/shaders/pacotes ainda não executam operações completas nesta fase.
 
 ## Requisitos de desenvolvimento
 - JDK 17.
@@ -43,7 +43,7 @@ O APK de depuração será produzido em `app/build/outputs/apk/debug/`. Nenhum A
 ## Próximas etapas
 1. Validar a interface em dispositivos e dimensões diferentes.
 2. Implementar preferências persistentes e perfis.
-3. Implementar gerenciamento de versões do motor Java.
+3. Integrar runtime Java ARM64 e adaptador FCL ao instalador oficial, incluindo preparação de natives, classpath e inicialização real.
 4. Integrar o motor Horizon de forma independente, após verificar compatibilidade do dispositivo.
 5. Implementar autenticação, downloads reais e gerenciamento de mods.
 
@@ -80,7 +80,10 @@ O APK de depuração será produzido em `app/build/outputs/apk/debug/`. Nenhum A
 - Consulta o manifesto oficial de versões da Mojang pela internet.
 - Categorias: Recentes (releases), Snapshots, Beta, Alpha, Primeiro de abril e Todas.
 - Pesquisa pelo identificador da versão e exibição da data de lançamento quando disponível.
-- Seleção da versão antes de criar um perfil local.
-- Inclui versões históricas e snapshots especiais quando publicados no manifesto oficial.
+- Seleção da versão antes de instalar.
+- Inclui todas as entradas publicadas no manifesto oficial atual, incluindo releases, snapshots, Beta, Alpha e snapshots especiais identificados como primeiro de abril. Builds Classic/Indev/Infdev que não aparecem no manifesto não são simuladas.
 - A lista depende de conexão com a internet; há estado de carregamento, mensagem de erro e opção de tentar novamente.
-- **Limite atual:** criar um perfil salva a seleção no aparelho, mas ainda não baixa o cliente, bibliotecas, assets ou arquivos nativos do Minecraft. O instalador real será implementado em outra etapa.
+- O instalador baixa client, bibliotecas Maven aplicáveis, arquivos de classifier nativo, índice/objetos de assets e logging; verifica SHA-1/tamanho quando o manifesto fornece esses dados e reutiliza arquivos válidos.
+- Os arquivos ficam em `filesDir/minecraft`, no armazenamento privado do aplicativo. A instalação só entra na lista após o download terminar.
+- **Limite atual:** os natives Linux são armazenados, mas não são considerados compatíveis com Android ARM64 nem extraídos para uso. O runtime Java ARM64 e o adaptador FCL ainda precisam ser integrados antes de iniciar Minecraft. Forge, Fabric e OptiFine também precisam de instaladores próprios.
+- Detalhes técnicos: [Catálogo e instalador](docs/MINECRAFT-VERSION-INSTALLER.md).
