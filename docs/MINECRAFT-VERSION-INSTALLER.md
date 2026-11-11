@@ -55,24 +55,24 @@ A tela de versões oferece Vanilla, Forge, NeoForge, Fabric, Legacy Fabric, Quil
 - **Quilt:** usa o mesmo fluxo de perfil, consultando a API oficial Quilt Meta e preservando o perfil base do Minecraft.
 - **Forge:** consulta a lista de componentes Forge do FCL e usa `GameBuilder` + `ForgeInstallTask` do FCL. O FCL baixa o installer, identifica o formato antigo/novo, executa os passos necessários e salva o perfil no repositório.
 - **NeoForge:** consulta a lista oficial de versões NeoForge do FCL e usa `NeoForgeInstallTask`, incluindo a cadeia de processors e o runner isolado `:jvm` do FCL.
-- Forge e NeoForge constroem o perfil completo (base Minecraft, bibliotecas, assets e patch do loader) pelo pipeline do FCL; não são tratados como simples download de JAR.
-- Os perfis só entram na lista local depois que o builder conclui, o repositório é atualizado e o perfil gerado é encontrado no disco.
+- **OptiFine:** consulta o catálogo de componentes OptiFine do FCL e usa o `GameBuilder` com `OptiFineRemoteVersion`/`OptiFineInstallTask`. O patcher do FCL valida a versão-base, aplica o patch e usa o `InstallerProcessRunner` com tentativas de Java 8, 17, 11 e 21 quando necessário. O perfil só é cadastrado após o builder terminar e o repositório encontrar o resultado.
+- Forge, NeoForge e OptiFine constroem o perfil pelo pipeline do FCL; não são tratados como simples download de JAR.
 
-Fabric/Quilt preservam as bibliotecas do Minecraft, adicionam bibliotecas do loader, combinam argumentos de inicialização e rejeitam identificadores/caminhos inseguros. Forge/NeoForge delegam a resolução de versões, dependências, instalação e processors ao backend FCL integrado.
+Fabric/Quilt preservam as bibliotecas do Minecraft, adicionam bibliotecas do loader, combinam argumentos de inicialização e rejeitam identificadores/caminhos inseguros. Forge/NeoForge/OptiFine delegam resolução de versões, dependências e patching ao backend FCL integrado.
 
 ### Ainda pendentes — não apresentados como instaladores funcionais
 
 - **Legacy Fabric:** precisa de adapter próprio para a API e as versões históricas.
-- **OptiFine:** precisa do patcher compatível com cada geração e de validação das combinações Forge/Vanilla.
 - **LiteLoader e Rift:** precisam de instaladores legados e suporte às versões realmente publicadas.
-- O suporte a loaders não pode ser considerado concluído apenas por listar versões ou baixar um JAR.
+- **Combinação Forge + OptiFine:** a tela atual instala OptiFine como perfil separado; não oferece combinação de componentes. A compatibilidade combinada precisa ser implementada e testada antes de ser anunciada.
+- O suporte a componentes não pode ser considerado concluído apenas por listar versões ou baixar um JAR.
 
 ## Limites que ainda impedem o botão Jogar de funcionar
 
 - Os classificadores `natives-linux`, `natives-windows` e `natives-osx` são ignorados no download Android; o runtime FCL precisa fornecer os natives Android ARM64.
 - A camada de runtime Java ARM64 do FCL ainda não foi conectada.
 - A adaptação FCL para construir classpath, extrair natives corretos, preparar argumentos JVM, abrir a superfície SDL/renderer e iniciar o processo ainda não foi integrada.
-- Forge, NeoForge, Fabric, Legacy Fabric, Quilt, OptiFine, LiteLoader e Rift exigem backends/patchers próprios e validação de dependências; os nomes já podem ser selecionados na interface, mas ainda não são instaláveis.
+- Forge, NeoForge e OptiFine usam o backend de instalação do FCL; Fabric/Quilt usam o instalador de perfis. Legacy Fabric, LiteLoader e Rift ainda não são instaláveis.
 - Metadados históricos sem `assetIndex` ainda precisam de tratamento específico por geração; o instalador não inventa um índice ausente. Os layouts `virtual` e `map_to_resources` são materializados quando as flags aparecem no índice.
 
 Portanto, esta etapa instala o conjunto de arquivos oficiais descritos pelo manifesto para versões suportadas, mas **não declara o jogo pronto para execução**. A disponibilidade do motor permanece bloqueada até concluir e testar o adaptador FCL em Android ARM64.
