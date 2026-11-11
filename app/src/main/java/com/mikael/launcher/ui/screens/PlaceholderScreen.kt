@@ -316,6 +316,8 @@ private fun VersionsScreen() {
             loadError = null
             try {
                 catalog = fetchMinecraftVersions()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 loadError = error.message ?: "Não foi possível consultar o catálogo da Mojang."
             } finally {
