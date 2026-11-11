@@ -3,7 +3,6 @@ package com.mikael.launcher.fcl
 import com.mio.data.Renderer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -68,25 +67,22 @@ class FclLaunchPreferencesTest {
     @Test
     fun `strip memory jvm args removes xms and xmx`() {
         assertEquals(
-            listOf("-XX:+UseG1GC", "-Dfml.ignoreInvalidMinecraftCertificates=true"),
-            stripMemoryJvmArgs(listOf("-XX:+UseG1GC", "-Xms512M", "-Xmx2048M", "-Dfml.ignoreInvalidMinecraftCertificates=true"))
+            "-XX:+UseG1GC -Dfml.ignoreInvalidMinecraftCertificates=true",
+            stripMemoryJvmArgs("-XX:+UseG1GC -Xms512M -Xmx2048M -Dfml.ignoreInvalidMinecraftCertificates=true")
         )
     }
 
     @Test
     fun `strip memory jvm args keeps other flags`() {
         assertEquals(
-            listOf("-Xincgc", "-XX:MaxMetaspaceSize=256m"),
-            stripMemoryJvmArgs(listOf("-Xincgc", "-XX:MaxMetaspaceSize=256m"))
+            "-Xincgc -XX:MaxMetaspaceSize=256m",
+            stripMemoryJvmArgs("-Xincgc -XX:MaxMetaspaceSize=256m")
         )
-        assertTrue(stripMemoryJvmArgs(emptyList()).isEmpty())
+        assertEquals("", stripMemoryJvmArgs(""))
     }
 
     @Test
     fun `strip memory jvm args is case insensitive`() {
-        assertEquals(
-            emptyList<String>(),
-            stripMemoryJvmArgs(listOf("-xms256m", "-XMX1024M"))
-        )
+        assertEquals("", stripMemoryJvmArgs("-xms256m -XMX1024M"))
     }
 }
