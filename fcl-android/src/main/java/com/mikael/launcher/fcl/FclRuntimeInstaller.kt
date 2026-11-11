@@ -168,8 +168,9 @@ object FclRuntimeInstaller {
             )
         } catch (failure: Throwable) {
             // Keep the last known-good runtime. If swapping failed, restore its directory.
+            // Rollback cleanup failures must not mask the original installation failure.
             if (newRuntimeMoved) {
-                deleteTree(target)
+                runCatching { deleteTree(target) }
             }
             if (previousMoved && backup.exists() && !target.exists()) {
                 runCatching {
@@ -177,13 +178,15 @@ object FclRuntimeInstaller {
                     JavaManager.addToJavaVersion(target)
                 }
             }
-            deleteTree(staging)
+            runCatching { deleteTree(staging) }
             if (failure is IOException) throw failure
             throw IOException("Failed to install Java ${runtime.majorVersion}: ${failure.message}", failure)
         } finally {
             // A successful swap removes the backup above. On errors the backup is
             // intentionally retained if restoration itself failed, for recovery.
-            if (target.exists()) deleteTree(staging)
+            // Cleanup must never throw here: an IOException raised from a finally
+            // block would replace and hide the original installation failure.
+            if (target.exists()) runCatching { deleteTree(staging) }
         }
     }
 

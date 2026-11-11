@@ -1,16 +1,23 @@
 package com.mikael.launcher.engine.java
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 data class MinecraftInstallProgress(
     val stage: String,
@@ -39,6 +46,17 @@ class MinecraftInstaller(
     private val gameDirectory: File,
     private val maxParallelDownloads: Int = 4
 ) {
+    companion object {
+        /**
+         * Two concurrent installs into the same game directory share the same
+         * ".part" files and would delete each other's in-flight downloads,
+         * producing intermittent corruption. Serialize installs per directory.
+         */
+        private val installLocks = ConcurrentHashMap<String, Mutex>()
+
+        private const val PROGRESS_MIN_INTERVAL_MS = 150L
+    }
+
     suspend fun install(
         versionId: String,
         metadataUrl: String,
@@ -51,6 +69,19 @@ class MinecraftInstaller(
         require(maxParallelDownloads in 1..8) { "Paralelismo fora do limite permitido." }
 
         val root = gameDirectory.canonicalFile
+        val installLock = installLocks.computeIfAbsent(root.canonicalPath) { Mutex() }
+        installLock.withLock {
+            installLocked(versionId, metadataUrl, metadataSha1, onProgress, root)
+        }
+    }
+
+    private suspend fun installLocked(
+        versionId: String,
+        metadataUrl: String,
+        metadataSha1: String?,
+        onProgress: suspend (MinecraftInstallProgress) -> Unit,
+        root: File
+    ): MinecraftInstallResult = withContext(Dispatchers.IO) {
         ensureDirectory(root, "pasta do Minecraft")
         val metadataBytes = readUrl(metadataUrl)
         if (!metadataSha1.isNullOrBlank() && sha1(metadataBytes) != metadataSha1.lowercase()) {
@@ -138,6 +169,10 @@ class MinecraftInstaller(
         }
         val completed = AtomicInteger(0)
         val total = uniqueTasks.size
+        // Thousands of assets would otherwise hop to the Main thread once per
+        // file and stall the UI on low-end devices. Emit at most every 150ms,
+        // plus always emit the final count.
+        val lastProgressEmit = AtomicLong(0L)
         val semaphore = kotlinx.coroutines.sync.Semaphore(maxParallelDownloads)
         coroutineScope {
             uniqueTasks.map { task ->
@@ -146,15 +181,26 @@ class MinecraftInstaller(
                     try {
                         download(task)
                         val count = completed.incrementAndGet()
-                        withContext(Dispatchers.Main) {
-                            onProgress(
-                                MinecraftInstallProgress(
-                                    stage = "Baixando arquivos oficiais",
-                                    completed = count,
-                                    total = total,
-                                    currentFile = task.label
+                        val now = System.currentTimeMillis()
+                        val shouldEmit = count == total || synchronized(lastProgressEmit) {
+                            if (now - lastProgressEmit.get() >= PROGRESS_MIN_INTERVAL_MS) {
+                                lastProgressEmit.set(now)
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                        if (shouldEmit) {
+                            withContext(Dispatchers.Main) {
+                                onProgress(
+                                    MinecraftInstallProgress(
+                                        stage = "Baixando arquivos oficiais",
+                                        completed = count,
+                                        total = total,
+                                        currentFile = task.label
+                                    )
                                 )
-                            )
+                            }
                         }
                     } finally {
                         semaphore.release()
@@ -240,34 +286,41 @@ class MinecraftInstaller(
     private suspend fun download(task: DownloadTask) {
         task.target.parentFile?.let { ensureDirectory(it, "diretório ${it.path}") }
         if (task.target.isFile && isValid(task.target, task.sha1, task.size)) return
-        val part = File(task.target.parentFile, task.target.name + ".part")
-        if (part.exists()) part.delete()
-        val connection = openHttpsConnection(task.url, "MikaelLauncher/0.1.0 (Minecraft asset installer)")
-        try {
-            connection.inputStream.use { input ->
-                part.outputStream().buffered().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        output.write(buffer, 0, read)
+        retryDownload {
+            // A previous failed attempt (including a cancelled install) must not
+            // leave an abandoned ".part" file behind.
+            val part = File(task.target.parentFile, task.target.name + ".part")
+            try {
+                if (part.exists()) part.delete()
+                val connection = openHttpsConnection(task.url, "MikaelLauncher/0.1.0 (Minecraft asset installer)")
+                try {
+                    connection.inputStream.use { input ->
+                        part.outputStream().buffered().use { output ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val read = input.read(buffer)
+                                if (read < 0) break
+                                output.write(buffer, 0, read)
+                            }
+                        }
                     }
+                } finally {
+                    connection.disconnect()
                 }
+                if (!isValid(part, task.sha1, task.size)) {
+                    error("Arquivo inválido após download: ${task.label}")
+                }
+                if (task.target.exists() && !task.target.delete()) {
+                    error("Não foi possível substituir ${task.target.name}")
+                }
+                if (!part.renameTo(task.target)) {
+                    part.copyTo(task.target, overwrite = true)
+                    part.delete()
+                }
+            } catch (error: Throwable) {
+                part.delete()
+                throw error
             }
-        } finally {
-            connection.disconnect()
-        }
-        if (!isValid(part, task.sha1, task.size)) {
-            part.delete()
-            error("Arquivo inválido após download: ${task.label}")
-        }
-        if (task.target.exists() && !task.target.delete()) {
-            part.delete()
-            error("Não foi possível substituir ${task.target.name}")
-        }
-        if (!part.renameTo(task.target)) {
-            part.copyTo(task.target, overwrite = true)
-            part.delete()
         }
     }
 
@@ -302,9 +355,9 @@ class MinecraftInstaller(
         return target
     }
 
-    private fun readUrl(url: String): ByteArray {
+    private suspend fun readUrl(url: String): ByteArray = retryDownload {
         val connection = openHttpsConnection(url, "MikaelLauncher/0.1.0")
-        return try {
+        try {
             connection.inputStream.use { it.readBytes() }
         } finally {
             connection.disconnect()
@@ -337,7 +390,8 @@ class MinecraftInstaller(
                     val failedUrl = currentUrl.toString()
                     val statusMessage = runCatching { connection.responseMessage }.getOrNull()
                     connection.disconnect()
-                    error(
+                    throw HttpDownloadException(
+                        status,
                         "Falha HTTP $status${statusMessage?.let { " ($it)" }.orEmpty()} " +
                             "ao baixar conteúdo oficial. URL: $failedUrl"
                     )
@@ -352,7 +406,12 @@ class MinecraftInstaller(
         val parent = target.parentFile ?: error("Destino sem pasta pai.")
         ensureDirectory(parent, "pasta de destino")
         val temp = File(parent, target.name + ".tmp")
-        temp.writeBytes(bytes)
+        try {
+            temp.writeBytes(bytes)
+        } catch (error: Throwable) {
+            temp.delete()
+            throw error
+        }
         if (target.exists() && !target.delete()) error("Não foi possível atualizar ${target.name}")
         if (!temp.renameTo(target)) {
             temp.copyTo(target, overwrite = true)
@@ -380,6 +439,45 @@ class MinecraftInstaller(
 /** Desktop-only window icons are not required by the Android Surface renderer. */
 internal fun minecraftAssetRequiredOnAndroid(name: String): Boolean =
     name != "icons/icon_16x16.png" && name != "icons/icon_32x32.png"
+
+/**
+ * A download/meta HTTP failure carrying the status code, so callers can decide
+ * whether the failure is transient (worth retrying) or definitive (404, 403...).
+ */
+internal class HttpDownloadException(val statusCode: Int?, message: String) : RuntimeException(message)
+
+/** HTTP statuses that describe transient traffic/server failures worth retrying. */
+private val RETRYABLE_HTTP_STATUS_CODES = setOf(408, 429, 500, 502, 503, 504)
+
+/** Total attempts per download: the first try plus at most two retries. */
+private const val DOWNLOAD_MAX_ATTEMPTS = 3
+
+internal fun minecraftIsRetryableDownloadFailure(error: Throwable): Boolean = when (error) {
+    is HttpDownloadException -> error.statusCode in RETRYABLE_HTTP_STATUS_CODES
+    is IOException -> true
+    else -> false
+}
+
+internal fun retryBackoffMillis(attempt: Int): Long =
+    (1000L shl (attempt - 1).coerceIn(0, 3)).coerceAtMost(8000L)
+
+/**
+ * Runs a download with bounded retries. Only transient network/HTTP failures are
+ * retried; validation errors, invalid metadata and cancellations propagate as-is.
+ */
+internal suspend fun <T> retryDownload(block: () -> T): T {
+    var attempt = 1
+    while (true) {
+        try {
+            return block()
+        } catch (error: Throwable) {
+            if (error is CancellationException) throw error
+            if (attempt >= DOWNLOAD_MAX_ATTEMPTS || !minecraftIsRetryableDownloadFailure(error)) throw error
+            delay(retryBackoffMillis(attempt))
+            attempt++
+        }
+    }
+}
 
 internal fun minecraftMavenPath(coordinate: String): String {
     val normalized = coordinate.substringBefore('@')

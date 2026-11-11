@@ -206,3 +206,34 @@ class MinecraftInstallerTest {
         assertEquals(0L, minecraftAssetEntries(index).single().size)
     }
 }
+
+class MinecraftInstallerRetryTest {
+    @Test
+    fun treatsTransientHttpStatusesAsRetryable() {
+        for (status in listOf(408, 429, 500, 502, 503, 504)) {
+            assert(minecraftIsRetryableDownloadFailure(HttpDownloadException(status, "HTTP $status")))
+        }
+    }
+
+    @Test
+    fun treatsDefinitiveHttpStatusesAsNotRetryable() {
+        for (status in listOf(400, 403, 404, 410)) {
+            assert(!minecraftIsRetryableDownloadFailure(HttpDownloadException(status, "HTTP $status")))
+        }
+    }
+
+    @Test
+    fun treatsIoFailuresAsRetryableAndValidationFailuresAsNot() {
+        assert(minecraftIsRetryableDownloadFailure(java.io.IOException("connection reset")))
+        assert(!minecraftIsRetryableDownloadFailure(IllegalArgumentException("bad metadata")))
+        assert(!minecraftIsRetryableDownloadFailure(IllegalStateException("bad state")))
+    }
+
+    @Test
+    fun backoffGrowsAndIsCapped() {
+        assertEquals(1000L, retryBackoffMillis(1))
+        assertEquals(2000L, retryBackoffMillis(2))
+        assertEquals(4000L, retryBackoffMillis(3))
+        assertEquals(8000L, retryBackoffMillis(9))
+    }
+}

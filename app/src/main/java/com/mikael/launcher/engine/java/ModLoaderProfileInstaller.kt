@@ -117,30 +117,35 @@ class ModLoaderProfileInstaller(
         return JSONObject().put("path", path).put("url", url).put("sha1", hash).put("size", size)
     }
 
-    private fun downloadArtifact(url: String, target: File, expectedSha1: String?, expectedSize: Long?) {
+    private suspend fun downloadArtifact(url: String, target: File, expectedSha1: String?, expectedSize: Long?) {
         target.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("Falha ao criar pasta de biblioteca.") }
         if (target.isFile && valid(target, expectedSha1, expectedSize)) return
-        val part = File(target.parentFile, target.name + ".part")
-        if (part.exists()) part.delete()
-        val connection = openHttps(url)
-        try {
-            connection.inputStream.use { input ->
-                part.outputStream().buffered().use { output -> input.copyTo(output) }
+        retryDownload {
+            val part = File(target.parentFile, target.name + ".part")
+            try {
+                if (part.exists()) part.delete()
+                val connection = openHttps(url)
+                try {
+                    connection.inputStream.use { input ->
+                        part.outputStream().buffered().use { output -> input.copyTo(output) }
+                    }
+                } finally {
+                    connection.disconnect()
+                }
+                if (!valid(part, expectedSha1, expectedSize)) {
+                    error("Biblioteca inválida após download: ${target.name}")
+                }
+                if (target.exists() && !target.delete()) {
+                    error("Não foi possível substituir ${target.name}.")
+                }
+                if (!part.renameTo(target)) {
+                    part.copyTo(target, overwrite = true)
+                    part.delete()
+                }
+            } catch (error: Throwable) {
+                part.delete()
+                throw error
             }
-        } finally {
-            connection.disconnect()
-        }
-        if (!valid(part, expectedSha1, expectedSize)) {
-            part.delete()
-            error("Biblioteca inválida após download: ${target.name}")
-        }
-        if (target.exists() && !target.delete()) {
-            part.delete()
-            error("Não foi possível substituir ${target.name}.")
-        }
-        if (!part.renameTo(target)) {
-            part.copyTo(target, overwrite = true)
-            part.delete()
         }
     }
 
@@ -150,9 +155,9 @@ class ModLoaderProfileInstaller(
         return sha1.isNullOrBlank() || sha1(file) == sha1.lowercase()
     }
 
-    private fun readHttps(url: String): String {
+    private suspend fun readHttps(url: String): String = retryDownload {
         val connection = openHttps(url)
-        return try {
+        try {
             connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         } finally {
             connection.disconnect()
@@ -177,7 +182,10 @@ class ModLoaderProfileInstaller(
             } else {
                 if (status !in 200..299) {
                     connection.disconnect()
-                    error("Falha HTTP $status ao consultar ou baixar metadados do mod loader.")
+                    throw HttpDownloadException(
+                        status,
+                        "Falha HTTP $status ao consultar ou baixar metadados do mod loader."
+                    )
                 }
                 return connection
             }
@@ -209,7 +217,12 @@ class ModLoaderProfileInstaller(
 
     private fun writeAtomically(target: File, bytes: ByteArray) {
         val temp = File(target.parentFile, target.name + ".tmp")
-        temp.writeBytes(bytes)
+        try {
+            temp.writeBytes(bytes)
+        } catch (error: Throwable) {
+            temp.delete()
+            throw error
+        }
         if (target.exists() && !target.delete()) error("Não foi possível substituir o perfil.")
         if (!temp.renameTo(target)) {
             temp.copyTo(target, overwrite = true)
