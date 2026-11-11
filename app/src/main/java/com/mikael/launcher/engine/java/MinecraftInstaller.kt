@@ -72,11 +72,9 @@ class MinecraftInstaller(
         val client = minecraftClientDownload(metadata)
             ?: error("Esta versão não fornece um arquivo client oficial em um formato reconhecido (downloads.client ou mainJar.downloads.artifact).")
 
-        tasks += DownloadTask(
-            client.getString("url"),
+        tasks += taskFromJson(
+            client,
             safeResolve(root, "versions/$versionId/$versionId.jar"),
-            client.optString("sha1").takeIf { it.isNotBlank() },
-            client.optLong("size").takeIf { it > 0L },
             "$versionId.jar"
         )
 
@@ -86,42 +84,15 @@ class MinecraftInstaller(
                 val library = libraries.optJSONObject(i) ?: continue
                 if (!libraryApplies(library)) continue
                 val name = library.optString("name").orEmpty()
-                val libDownloads = library.optJSONObject("downloads")
-                val artifact = libDownloads?.optJSONObject("artifact")
+                val artifact = minecraftLibraryArtifact(library)
                 if (artifact != null) {
                     val relative = artifact.optString("path").ifBlank { mavenPath(name) }
                     tasks += taskFromJson(artifact, safeResolve(root, "libraries/$relative"), name)
-                } else {
-                    val coordinate = name.takeIf { it.isNotBlank() } ?: continue
-                    val relative = mavenPath(coordinate)
-                    val repository = library.optString("url").ifBlank { "https://libraries.minecraft.net/" }
-                    tasks += DownloadTask(
-                        repository.trimEnd('/') + "/" + relative,
-                        safeResolve(root, "libraries/$relative"),
-                        null,
-                        null,
-                        coordinate
-                    )
                 }
 
-                val natives = library.optJSONObject("natives")
-                val classifiers = libDownloads?.optJSONObject("classifiers")
-                val nativeTemplate = natives?.optString("linux")?.takeIf { it.isNotBlank() }
-                if (nativeTemplate != null && classifiers != null) {
-                    val arch = if (System.getProperty("os.arch").contains("64")) "64" else "32"
-                    val classifier = nativeTemplate.replace("$" + "{arch}", arch)
-                    val nativeArtifact = classifiers.optJSONObject(classifier)
-                    if (nativeArtifact != null) {
-                        val relative = nativeArtifact.optString("path").ifBlank {
-                            mavenPath(name.substringBefore('@') + ":" + classifier)
-                        }
-                        tasks += taskFromJson(
-                            nativeArtifact,
-                            safeResolve(root, "libraries/$relative"),
-                            "$name ($classifier)"
-                        )
-                    }
-                }
+                // Desktop native classifiers (linux/windows/osx) are not Android ARM64
+                // binaries. FCL supplies Android-compatible natives separately.
+
             }
         }
 
@@ -212,13 +183,17 @@ class MinecraftInstaller(
         val label: String
     )
 
-    private fun taskFromJson(json: JSONObject, target: File, label: String) = DownloadTask(
-        json.getString("url"),
-        target,
-        json.optString("sha1").takeIf { it.isNotBlank() },
-        json.optLong("size").takeIf { it > 0L },
-        label
-    )
+    private fun taskFromJson(json: JSONObject, target: File, label: String): DownloadTask {
+        val url = json.optString("url").trim()
+        require(url.startsWith("https://")) { "URL HTTPS ausente ou inválida para $label." }
+        val hash = json.optString("sha1").takeIf { it.isNotBlank() }
+        require(hash == null || hash.matches(Regex("[a-fA-F0-9]{40}"))) {
+            "SHA-1 inválido nos metadados de $label."
+        }
+        val declaredSize = if (json.has("size") && !json.isNull("size")) json.optLong("size", -1L) else -1L
+        require(declaredSize >= -1L) { "Tamanho inválido nos metadados de $label." }
+        return DownloadTask(url, target, hash, declaredSize.takeIf { it >= 0L }, label)
+    }
 
     private fun libraryApplies(library: JSONObject): Boolean =
         minecraftLibraryApplies(
@@ -427,4 +402,21 @@ internal fun minecraftLibraryApplies(
         }
     }
     return allowed
+}
+
+/** Resolves a Maven artifact even when metadata omits downloads.artifact. */
+internal fun minecraftLibraryArtifact(library: JSONObject): JSONObject? {
+    val coordinate = library.optString("name").trim()
+    if (coordinate.isBlank()) return null
+    val artifact = library.optJSONObject("downloads")?.optJSONObject("artifact")
+    val path = artifact?.optString("path").orEmpty().ifBlank { minecraftMavenPath(coordinate) }
+    val explicitUrl = artifact?.optString("url").orEmpty().trim()
+    val repository = library.optString("url").trim().ifBlank { "https://libraries.minecraft.net/" }
+    val resolvedUrl = explicitUrl.ifBlank { repository.trimEnd('/') + "/" + path }
+    require(resolvedUrl.startsWith("https://")) { "Repositório HTTPS inválido para a biblioteca $coordinate." }
+    return JSONObject()
+        .put("url", resolvedUrl)
+        .put("path", path)
+        .put("sha1", artifact?.optString("sha1").orEmpty())
+        .put("size", artifact?.optLong("size", -1L) ?: -1L)
 }
