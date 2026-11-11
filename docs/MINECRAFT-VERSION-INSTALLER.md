@@ -21,13 +21,14 @@ A pesquisa usa o ID da versão. O manifesto é a fonte da URL e do SHA-1 do JSON
 
 1. Baixa e valida o JSON da versão pelo SHA-1 do manifesto.
 2. Baixa o client JAR e verifica SHA-1/tamanho quando fornecidos.
-3. Resolve coordenadas Maven para caminhos de bibliotecas e baixa os artefatos aplicáveis às regras Linux/ARM64 do ambiente.
-4. Baixa os classificadores nativos Linux descritos no JSON, mantendo os arquivos compactados na cache de bibliotecas.
-5. Baixa o índice de assets e todos os objetos endereçados por hash.
-6. Baixa a configuração de logging quando declarada.
-7. Evita downloads duplicados, valida arquivos existentes e usa arquivos temporários antes de substituir os destinos.
-8. Executa até quatro downloads simultâneos e publica progresso para a interface.
-9. Só cadastra a instalação na lista do launcher depois que todas as tarefas terminam com sucesso.
+3. Resolve coordenadas Maven para caminhos de bibliotecas; usa `downloads.artifact` quando presente e monta a URL a partir do repositório Maven declarado (ou `libraries.minecraft.net`) quando ausente.
+4. Valida URLs HTTPS, SHA-1 e tamanho dos artefatos quando esses campos são fornecidos.
+5. Não baixa classificadores nativos desktop (`natives-linux`, `natives-windows`, `natives-osx`) como se fossem bibliotecas Android ARM64; a camada nativa Android é responsabilidade do FCL.
+6. Baixa o índice de assets e todos os objetos endereçados por hash.
+7. Baixa a configuração de logging quando declarada.
+8. Evita downloads duplicados, valida arquivos existentes e usa arquivos temporários antes de substituir os destinos.
+9. Executa até quatro downloads simultâneos e publica progresso para a interface.
+10. Só cadastra a instalação na lista do launcher depois que todas as tarefas terminam com sucesso.
 
 Downloads usam HTTPS; redirecionamento para HTTP é rejeitado. Os caminhos de destino são normalizados e impedidos de escapar da pasta do jogo.
 
@@ -43,4 +44,4 @@ Portanto, esta etapa instala o conjunto de arquivos oficiais descritos pelo mani
 
 ## Verificações
 
-Os testes unitários cobrem a resolução de coordenadas Maven comuns, classifiers, extensões e rejeição de coordenadas inválidas. O workflow Android também compila o app e executa a suíte unitária.
+Os testes unitários cobrem a resolução de coordenadas Maven comuns, classifiers, extensões, fallback para repositório Maven, preservação de artefatos explícitos e rejeição de repositórios inseguros. O workflow Android também compila o app e executa a suíte unitária.
