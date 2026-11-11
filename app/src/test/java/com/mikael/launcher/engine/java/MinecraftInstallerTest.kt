@@ -77,7 +77,7 @@ class MinecraftInstallerTest {
             """{"rules":[
                 {"action":"allow"},
                 {"action":"disallow","os":{"name":"windows"}},
-                {"action":"allow","os":{"name":"linux","arch":"aarch64","version":"^5\\\\."}}
+                {"action":"allow","os":{"name":"linux","arch":"aarch64","version":"^5\\."}}
             ]}"""
         )
         assertEquals(true, minecraftLibraryApplies(library, "linux", "aarch64", "5.15.0"))
