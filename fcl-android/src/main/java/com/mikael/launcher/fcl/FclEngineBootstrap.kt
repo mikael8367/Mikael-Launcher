@@ -77,6 +77,29 @@ object FclEngineBootstrap {
         }
     }
 
+    suspend fun refreshAndSelectGameVersion(context: Context, versionId: String): Boolean {
+        if (!currentStatus.initialized) {
+            initialize(context.applicationContext)
+        }
+        return mutex.withLock {
+            if (!currentStatus.initialized) return@withLock false
+            withContext(Dispatchers.IO) {
+                val target = FclGameDirectoryResolver.resolve(context.applicationContext).canonicalFile
+                val profile = Profiles.getSelectedProfile()
+                if (profile.gameDir.canonicalFile != target) {
+                    profile.gameDir = target
+                }
+                profile.repository.refreshVersions()
+                check(profile.repository.hasVersion(versionId)) {
+                    "O FCL não encontrou o perfil instalado: $versionId"
+                }
+                profile.selectedVersion = versionId
+                Profiles.setSelectedProfile(profile)
+                true
+            }
+        }
+    }
+
     suspend fun initialize(context: Context): FclBootstrapStatus = mutex.withLock {
         if (currentStatus.initialized) return@withLock currentStatus
 
