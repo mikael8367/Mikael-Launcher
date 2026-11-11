@@ -56,7 +56,7 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
 ) -> jstring {
     let active_sessions = sessions().lock().map(|items| items.len()).unwrap_or(0);
     let status = format!(
-        r#"{{"library":"loaded","stage":"jni-prototype","renderer":"not-integrated","activeSessions":{active_sessions}}}"#
+        r#"{{"library":"loaded","stage":"android-surface-prototype","renderer":"wgpu-surface-clear","activeSessions":{active_sessions},"minecraftClient":false}}"#
     );
 
     env.new_string(status)
@@ -69,7 +69,7 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
     mut env: JNIEnv,
     _class: JClass,
 ) -> jstring {
-    let capabilities = r#"{"abi":"arm64-v8a","jni":true,"vulkan":false,"gles":false,"touchInput":false,"minecraftRuntime":false}"#;
+    let capabilities = r#"{"abi":"arm64-v8a","jni":true,"nativeActivity":true,"winit":true,"wgpu":true,"vulkan":"runtime-detected","gles":"runtime-detected","touchInput":false,"minecraftRuntime":false}"#;
 
     env.new_string(capabilities)
         .map(|value| value.into_raw())
@@ -97,6 +97,185 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
     } else {
         JNI_FALSE
     }
+}
+
+
+#[cfg(target_os = "android")]
+mod android_surface {
+    use std::sync::Arc;
+    use winit::{
+        application::ApplicationHandler,
+        event::WindowEvent,
+        event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+        platform::android::{EventLoopBuilderExtAndroid, activity::AndroidApp},
+        window::{Window, WindowId},
+    };
+
+    struct GpuState {
+        _instance: wgpu::Instance,
+        surface: wgpu::Surface<'static>,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        config: wgpu::SurfaceConfiguration,
+    }
+
+    #[derive(Default)]
+    struct HorizonSurfaceApp {
+        window: Option<Arc<Window>>,
+        gpu: Option<GpuState>,
+        startup_error: Option<String>,
+    }
+
+    impl HorizonSurfaceApp {
+        fn initialize(&mut self, event_loop: &ActiveEventLoop) -> Result<(), String> {
+            let window = Arc::new(
+                event_loop
+                    .create_window(Window::default_attributes().with_title("Horizon Rust • Android renderer"))
+                    .map_err(|error| format!("Falha ao criar janela Android: {error}"))?,
+            );
+            let size = window.inner_size();
+            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+            let surface = instance
+                .create_surface(window.clone())
+                .map_err(|error| format!("Falha ao criar superfície Winit: {error}"))?;
+            let adapter = pollster::block_on(instance.request_adapter(
+                &wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::HighPerformance,
+                    compatible_surface: Some(&surface),
+                    force_fallback_adapter: false,
+                },
+            ))
+            .map_err(|error| format!("Nenhum adaptador gráfico compatível: {error}"))?;
+            let (device, queue) = pollster::block_on(
+                adapter.request_device(&wgpu::DeviceDescriptor::default()),
+            )
+            .map_err(|error| format!("Falha ao criar dispositivo gráfico: {error}"))?;
+            let config = surface
+                .get_default_config(&adapter, size.width.max(1), size.height.max(1))
+                .ok_or_else(|| "A GPU não oferece configuração de apresentação para esta superfície.".to_string())?;
+            surface.configure(&device, &config);
+
+            self.window = Some(window.clone());
+            self.gpu = Some(GpuState {
+                _instance: instance,
+                surface,
+                device,
+                queue,
+                config,
+            });
+            window.request_redraw();
+            Ok(())
+        }
+
+        fn draw(&mut self) {
+            let (Some(window), Some(gpu)) = (&self.window, &self.gpu) else {
+                return;
+            };
+            match gpu.surface.get_current_texture() {
+                wgpu::CurrentSurfaceTexture::Success(frame)
+                | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
+                    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                    let mut encoder = gpu.device.create_command_encoder(
+                        &wgpu::CommandEncoderDescriptor {
+                            label: Some("horizon-android-surface-probe"),
+                        },
+                    );
+                    {
+                        let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: Some("horizon-android-clear-pass"),
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &view,
+                                depth_slice: None,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                                        r: 0.025,
+                                        g: 0.12,
+                                        b: 0.09,
+                                        a: 1.0,
+                                    }),
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            })],
+                            depth_stencil_attachment: None,
+                            timestamp_writes: None,
+                            occlusion_query_set: None,
+                        });
+                    }
+                    gpu.queue.submit(Some(encoder.finish()));
+                    frame.present();
+                }
+                wgpu::CurrentSurfaceTexture::Outdated
+                | wgpu::CurrentSurfaceTexture::Lost => {
+                    gpu.surface.configure(&gpu.device, &gpu.config);
+                }
+                wgpu::CurrentSurfaceTexture::Timeout
+                | wgpu::CurrentSurfaceTexture::Occluded
+                | wgpu::CurrentSurfaceTexture::Validation => {}
+            }
+            window.request_redraw();
+        }
+    }
+
+    impl ApplicationHandler for HorizonSurfaceApp {
+        fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+            if self.window.is_some() {
+                return;
+            }
+            if let Err(error) = self.initialize(event_loop) {
+                self.startup_error = Some(error);
+                event_loop.exit();
+            }
+        }
+
+        fn window_event(
+            &mut self,
+            event_loop: &ActiveEventLoop,
+            _window_id: WindowId,
+            event: WindowEvent,
+        ) {
+            match event {
+                WindowEvent::CloseRequested => event_loop.exit(),
+                WindowEvent::Resized(size) => {
+                    if size.width > 0 && size.height > 0 {
+                        if let Some(gpu) = self.gpu.as_mut() {
+                            gpu.config.width = size.width;
+                            gpu.config.height = size.height;
+                            gpu.surface.configure(&gpu.device, &gpu.config);
+                        }
+                    }
+                }
+                WindowEvent::RedrawRequested => self.draw(),
+                _ => {}
+            }
+        }
+    }
+
+    pub fn run(app: AndroidApp) {
+        let mut builder = EventLoop::<()>::builder();
+        builder.with_android_app(app);
+        let event_loop = match builder.build() {
+            Ok(event_loop) => event_loop,
+            Err(error) => {
+                eprintln!("Horizon Android: não foi possível iniciar o event loop: {error}");
+                return;
+            }
+        };
+        event_loop.set_control_flow(ControlFlow::Wait);
+        let mut application = HorizonSurfaceApp::default();
+        if let Err(error) = event_loop.run_app(&mut application) {
+            eprintln!("Horizon Android: erro no event loop: {error}");
+        }
+        if let Some(error) = application.startup_error {
+            eprintln!("Horizon Android: {error}");
+        }
+    }
+}
+
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub fn android_main(app: winit::platform::android::activity::AndroidApp) {
+    android_surface::run(app);
 }
 
 #[cfg(test)]
