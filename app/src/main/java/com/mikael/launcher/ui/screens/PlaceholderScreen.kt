@@ -272,22 +272,33 @@ private fun VersionsScreen() {
     }
 
     LaunchedEffect(selectedVersion, selectedLoader) {
-        val backend = when (selectedLoader) {
+        val fabricBackend = when (selectedLoader) {
             "Fabric" -> com.mikael.launcher.engine.java.SupportedProfileLoader.FABRIC
             "Quilt" -> com.mikael.launcher.engine.java.SupportedProfileLoader.QUILT
             else -> null
         }
-        if (backend == null) {
+        val fclBackend = when (selectedLoader) {
+            "Forge" -> com.mikael.launcher.fcl.FclModLoader.FORGE
+            "NeoForge" -> com.mikael.launcher.fcl.FclModLoader.NEOFORGE
+            else -> null
+        }
+        if (fabricBackend == null && fclBackend == null) {
             loaderVersions = emptyList()
             selectedLoaderVersion = ""
             loaderCatalogMessage = if (selectedLoader == "Vanilla") "" else
-                "$selectedLoader ainda não possui instalador Android integrado."
+                "$selectedLoader ainda não possui instalador integrado."
         } else {
             loaderCatalogMessage = "Consultando versões compatíveis..."
             try {
-                val releases = com.mikael.launcher.engine.java.ModLoaderProfileInstaller(
-                    FclGameDirectoryResolver.resolve(context)
-                ).availableVersions(selectedVersion, backend)
+                val releases = if (fclBackend != null) {
+                    com.mikael.launcher.fcl.FclModLoaderInstaller.availableVersions(
+                        context, selectedVersion, fclBackend
+                    ).map { com.mikael.launcher.engine.java.LoaderRelease(it.version, it.stable) }
+                } else {
+                    com.mikael.launcher.engine.java.ModLoaderProfileInstaller(
+                        FclGameDirectoryResolver.resolve(context)
+                    ).availableVersions(selectedVersion, requireNotNull(fabricBackend))
+                }
                 loaderVersions = releases
                 selectedLoaderVersion = releases.firstOrNull()?.version.orEmpty()
                 loaderCatalogMessage = if (releases.isEmpty()) {
@@ -319,29 +330,44 @@ private fun VersionsScreen() {
         try {
             val entry = catalog.firstOrNull { it.id == selectedVersion }
                 ?: error("A versão selecionada não está disponível no catálogo oficial.")
-            val gameDir = FclGameDirectoryResolver.resolve(context)
-            MinecraftInstaller(gameDir).install(
-                versionId = entry.id,
-                metadataUrl = entry.url,
-                metadataSha1 = entry.sha1
-            ) { progress ->
-                installProgress = progress
-            }
-            if (selectedLoader == "Vanilla") {
-                saveProfiles(profiles + entry.id, entry.id)
-                installedVersion = entry.id
-            } else {
-                val backend = when (selectedLoader) {
-                    "Fabric" -> com.mikael.launcher.engine.java.SupportedProfileLoader.FABRIC
-                    "Quilt" -> com.mikael.launcher.engine.java.SupportedProfileLoader.QUILT
-                    else -> error("O instalador real de $selectedLoader ainda não está integrado.")
+            if (selectedLoader == "Forge" || selectedLoader == "NeoForge") {
+                val backend = if (selectedLoader == "Forge") {
+                    com.mikael.launcher.fcl.FclModLoader.FORGE
+                } else {
+                    com.mikael.launcher.fcl.FclModLoader.NEOFORGE
                 }
                 val loaderVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
                     ?: error("Não há uma versão compatível de $selectedLoader selecionada.")
-                val result = com.mikael.launcher.engine.java.ModLoaderProfileInstaller(gameDir)
-                    .install(entry.id, backend, loaderVersion)
+                val result = com.mikael.launcher.fcl.FclModLoaderInstaller.install(
+                    context, entry.id, backend, loaderVersion
+                )
                 saveProfiles(profiles + result.profileId, result.profileId)
                 installedVersion = result.profileId
+            } else {
+                val gameDir = FclGameDirectoryResolver.resolve(context)
+                MinecraftInstaller(gameDir).install(
+                    versionId = entry.id,
+                    metadataUrl = entry.url,
+                    metadataSha1 = entry.sha1
+                ) { progress ->
+                    installProgress = progress
+                }
+                if (selectedLoader == "Vanilla") {
+                    saveProfiles(profiles + entry.id, entry.id)
+                    installedVersion = entry.id
+                } else {
+                    val backend = when (selectedLoader) {
+                        "Fabric" -> com.mikael.launcher.engine.java.SupportedProfileLoader.FABRIC
+                        "Quilt" -> com.mikael.launcher.engine.java.SupportedProfileLoader.QUILT
+                        else -> error("O instalador real de $selectedLoader ainda não está integrado.")
+                    }
+                    val loaderVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
+                        ?: error("Não há uma versão compatível de $selectedLoader selecionada.")
+                    val result = com.mikael.launcher.engine.java.ModLoaderProfileInstaller(gameDir)
+                        .install(entry.id, backend, loaderVersion)
+                    saveProfiles(profiles + result.profileId, result.profileId)
+                    installedVersion = result.profileId
+                }
             }
             showInfo = true
         } catch (cancelled: CancellationException) {
@@ -474,13 +500,13 @@ private fun VersionsScreen() {
             Text(
                 when (selectedLoader) {
                     "Vanilla" -> "Vanilla: instalação oficial do cliente e dependências."
-                    "Fabric", "Quilt" -> loaderCatalogMessage
+                    "Fabric", "Quilt", "Forge", "NeoForge" -> loaderCatalogMessage
                     else -> "$selectedLoader: instalador específico ainda não integrado. Não será exibido como instalável."
                 },
-                color = if (selectedLoader == "Vanilla" || selectedLoader == "Fabric" || selectedLoader == "Quilt") TextSecondary else AccentYellow,
+                color = if (selectedLoader in setOf("Vanilla", "Fabric", "Quilt", "Forge", "NeoForge")) TextSecondary else AccentYellow,
                 fontSize = 10.sp
             )
-            if (selectedLoader == "Fabric" || selectedLoader == "Quilt") {
+            if (selectedLoader == "Fabric" || selectedLoader == "Quilt" || selectedLoader == "Forge" || selectedLoader == "NeoForge") {
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -498,13 +524,13 @@ private fun VersionsScreen() {
                 text = when {
                     installRequested -> "Instalando..."
                     selectedLoader == "Vanilla" -> "⬇  Baixar e instalar Vanilla"
-                    selectedLoader == "Fabric" || selectedLoader == "Quilt" -> "⬇  Instalar $selectedLoader"
+                    selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge") -> "⬇  Instalar $selectedLoader"
                     else -> "$selectedLoader indisponível"
                 },
                 onClick = {
                     if (!installRequested) {
                         if (selectedLoader == "Vanilla" ||
-                            (selectedLoader == "Fabric" || selectedLoader == "Quilt") && selectedLoaderVersion.isNotBlank()
+                            selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge") && selectedLoaderVersion.isNotBlank()
                         ) {
                             installRequested = true
                         } else {
