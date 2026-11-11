@@ -44,7 +44,7 @@ O APK de depuração será produzido em `app/build/outputs/apk/debug/`. Nenhum A
 1. Validar a interface em dispositivos e dimensões diferentes.
 2. Implementar preferências persistentes e perfis.
 3. Integrar runtime Java ARM64 e adaptador FCL ao instalador oficial, incluindo preparação de natives, classpath e inicialização real.
-4. Integrar o motor Horizon de forma independente, após verificar compatibilidade do dispositivo.
+4. Criar e validar um alvo Android ARM64 do Horizon Rust de forma independente; o repositório upstream atualmente documenta downloads apenas para desktop. Ver [auditoria Android](docs/HORIZON-RUST-ANDROID-AUDIT.md).
 5. Implementar autenticação, downloads reais e gerenciamento de mods.
 
 
@@ -55,7 +55,7 @@ O APK de depuração será produzido em `app/build/outputs/apk/debug/`. Nenhum A
 - Área de contas com opções visuais Microsoft, Offline e Ely.by.
 - Cadastro local Offline com validação de nome (1–16 caracteres, letras, números e sublinhado).
 - Seleção e remoção de perfis locais; o perfil escolhido é refletido no menu superior.
-- Minecraft Java e Horizon Rust continuam apresentados como motores separados. A seção Horizon Rust possui tela própria de apresentação; o pacote e o instalador real ainda não estão disponíveis.
+- Minecraft Java e Horizon Rust continuam apresentados como motores separados. A seção Horizon Rust possui tela própria, link para o repositório oficial e aviso de compatibilidade; não existe pacote Android oficial confirmado nem instalador funcional. Consulte [auditoria de integração Android](docs/HORIZON-RUST-ANDROID-AUDIT.md).
 
 **Limites desta etapa:** o avatar ainda é ilustrativo e não baixa a skin real; Microsoft e Ely.by ainda não autenticam; perfis locais são estado de interface, não tokens de sessão oficiais. A integração segura de OAuth, consulta de skin e persistência definitiva será feita na etapa de lógica.
 
