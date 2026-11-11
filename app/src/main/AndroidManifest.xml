@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <application
+        android:name="com.tungsten.fcl.FCLApp"
         android:allowBackup="false"
         android:label="Mikael Launcher"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@style/Theme.FoldCraftLauncher">
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout"
@@ -16,5 +18,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Do not expose the upstream FCL launcher UI; Mikael Launcher owns the entry screen. -->
+        <activity
+            android:name="com.tungsten.fcl.activity.SplashActivity"
+            tools:node="remove" />
+        <activity
+            android:name="com.tungsten.fcl.activity.MainActivity"
+            tools:node="remove" />
+        <activity-alias
+            android:name="com.tungsten.fcl.ImportActivity"
+            tools:node="remove" />
     </application>
 </manifest>
