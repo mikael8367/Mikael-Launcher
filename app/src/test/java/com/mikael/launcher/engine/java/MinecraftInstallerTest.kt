@@ -104,4 +104,51 @@ class MinecraftInstallerTest {
     fun defaultsLibrariesWithoutRulesToAllowed() {
         assertEquals(true, minecraftLibraryApplies(JSONObject("""{"name":"org.example:demo:1.0"}"""), "linux", "aarch64", "5.15"))
     }
+
+    @Test
+    fun resolvesLibraryFromOfficialDefaultMavenRepositoryWhenArtifactIsMissing() {
+        val library = JSONObject("""{"name":"com.example:sample:1.2.3"}""")
+        val artifact = minecraftLibraryArtifact(library)!!
+        assertEquals(
+            "https://libraries.minecraft.net/com/example/sample/1.2.3/sample-1.2.3.jar",
+            artifact.getString("url")
+        )
+        assertEquals(
+            "com/example/sample/1.2.3/sample-1.2.3.jar",
+            artifact.getString("path")
+        )
+    }
+
+    @Test
+    fun resolvesLibraryFromItsDeclaredMavenRepository() {
+        val library = JSONObject(
+            """{"name":"org.example:custom:2.0@zip","url":"https://repo.example/maven/"}"""
+        )
+        val artifact = minecraftLibraryArtifact(library)!!
+        assertEquals(
+            "https://repo.example/maven/org/example/custom/2.0/custom-2.0.zip",
+            artifact.getString("url")
+        )
+    }
+
+    @Test
+    fun keepsOfficialArtifactUrlAndPathWhenProvided() {
+        val library = JSONObject(
+            """{"name":"org.example:custom:2.0","downloads":{"artifact":{"path":"custom/path.jar","url":"https://cdn.example/custom.jar","sha1":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size":123}}}"""
+        )
+        val artifact = minecraftLibraryArtifact(library)!!
+        assertEquals("https://cdn.example/custom.jar", artifact.getString("url"))
+        assertEquals("custom/path.jar", artifact.getString("path"))
+        assertEquals(123L, artifact.getLong("size"))
+    }
+
+    @Test
+    fun rejectsInsecureLibraryRepository() {
+        val library = JSONObject(
+            """{"name":"org.example:custom:2.0","url":"http://repo.example/maven/"}"""
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            minecraftLibraryArtifact(library)
+        }
+    }
 }
