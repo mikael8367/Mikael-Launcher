@@ -20,8 +20,9 @@ class JavaRuntimeInspectorTest {
 
     @Test
     fun mismatchedElfArchitectureIsRejected() {
-        val root = createRuntime("8.0.442", elfClass = 2, machine = 62)
+        val root = createRuntime("8.0.442", elfClass = 2, machine = 183)
         try {
+            File(root, "lib/server/libjvm.so").writeBytes(elfHeader(2, 62))
             val result = JavaRuntimeInspector.inspect(root, "arm64-v8a")
             assertTrue(result is JavaRuntimeInspection.Invalid)
             assertEquals("runtime_abi_mismatch", (result as JavaRuntimeInspection.Invalid).reasonCode)
