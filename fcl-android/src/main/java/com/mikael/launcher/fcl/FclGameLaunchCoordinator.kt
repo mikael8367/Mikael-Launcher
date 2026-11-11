@@ -140,15 +140,23 @@ object FclGameLaunchCoordinator {
                     }
                 }
             }
-            jnaVersion?.let {
-                launcher.setJnaVersion(it)
-                JnaNatives.ensureNativeLibrary(context, it)
+            jnaVersion?.let { versionName ->
+                withContext(Dispatchers.IO) {
+                    launcher.setJnaVersion(versionName)
+                    JnaNatives.ensureNativeLibrary(context, versionName)
+                }
             }
             lwjglVersion?.let(launcher::setLwjglVersion)
 
             val bridge = withContext(Dispatchers.IO) { launcher.launch() }
 
             withContext(Dispatchers.Main) {
+                check(!context.isFinishing && !context.isDestroyed) {
+                    "A tela do launcher foi encerrada antes de abrir o Minecraft."
+                }
+                check(launchOptions.renderer != null) {
+                    "Nenhum renderizador compatível está selecionado para esta versão."
+                }
                 CallbackBridge.nativeSetUseInputStackQueue(version.arguments.isPresent)
                 bridge.scaleFactor = 1.0
                 bridge.controller = setting.controller
