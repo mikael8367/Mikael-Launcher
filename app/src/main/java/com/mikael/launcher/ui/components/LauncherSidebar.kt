@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.LightMode
@@ -118,6 +119,7 @@ fun LauncherSidebar(
                 val items = listOf(
                     LauncherSection.HOME to Icons.Rounded.Home,
                     LauncherSection.PLAY to Icons.Rounded.PlayArrow,
+                    LauncherSection.HORIZON_RUST to Icons.Rounded.Bolt,
                     LauncherSection.VERSIONS to Icons.Rounded.Layers,
                     LauncherSection.ACCOUNTS to Icons.Rounded.AccountCircle,
                     LauncherSection.MODS to Icons.Rounded.Extension,
