@@ -71,6 +71,34 @@ object FclEngineBootstrap {
                 // FCLPath contains static paths used by ConfigHolder and other FCL
                 // classes. It must be initialized before those classes are touched.
                 FCLPath.loadPaths(appContext)
+
+                // The pinned FCL upstream defaults several directories to /sdcard/FCL.
+                // On Android 11+ this requires broad all-files access, which this
+                // launcher deliberately does not request. Redirect these paths to
+                // app-owned storage before any FCL service writes to them.
+                val fclPrivateRoot = File(appContext.filesDir, "fcl").apply {
+                    if (!exists() && !mkdirs()) {
+                        throw IllegalStateException("Não foi possível criar o diretório privado do FCL.")
+                    }
+                }
+                FCLPath.LOG_DIR = File(fclPrivateRoot, "log").absolutePath
+                FCLPath.CONTROLLER_DIR = File(fclPrivateRoot, "control").absolutePath
+                FCLPath.SHARE_DIR = File(fclPrivateRoot, "share").absolutePath
+                FCLPath.SHARED_COMMON_DIR = File(
+                    appContext.getExternalFilesDir(null) ?: appContext.filesDir,
+                    ".minecraft"
+                ).absolutePath
+                listOf(
+                    FCLPath.LOG_DIR,
+                    FCLPath.CONTROLLER_DIR,
+                    FCLPath.SHARE_DIR,
+                    FCLPath.SHARED_COMMON_DIR
+                ).forEach { path ->
+                    val directory = File(path)
+                    if (!directory.exists() && !directory.mkdirs()) {
+                        throw IllegalStateException("Não foi possível criar diretório do FCL: $path")
+                    }
+                }
                 Logging.start(Paths.get(FCLPath.LOG_DIR))
 
                 RendererManager.init(appContext)
