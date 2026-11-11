@@ -3,8 +3,8 @@ package com.mikael.launcher.engine.horizon
 /**
  * Thin JNI boundary for the experimental Horizon Rust Android bootstrap.
  *
- * This bridge only validates native loading and session bookkeeping. It does
- * not start the Horizon game or create a graphics renderer yet.
+ * This bridge reports JNI/session state and the result of the experimental Winit/WGPU
+ * Android surface probe. It does not start Horizon gameplay or load Minecraft worlds.
  */
 object HorizonNativeBridge {
     private const val LIBRARY_NAME = "horizon_android"
