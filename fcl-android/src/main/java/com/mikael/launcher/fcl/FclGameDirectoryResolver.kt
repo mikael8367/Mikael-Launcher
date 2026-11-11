@@ -1,6 +1,8 @@
 package com.mikael.launcher.fcl
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -23,8 +25,17 @@ object FclGameDirectoryResolver {
                 if (!exists() && !mkdirs()) error("Não foi possível criar a pasta padrão do Minecraft.")
             }
         }
-        check(Build.VERSION.SDK_INT < 30 || Environment.isExternalStorageManager()) {
-            "Conceda a permissão 'Acesso a todos os arquivos' nas configurações para usar essa pasta com o FCL."
+        if (Build.VERSION.SDK_INT >= 30) {
+            check(Environment.isExternalStorageManager()) {
+                "Conceda a permissão 'Acesso a todos os arquivos' nas configurações para usar essa pasta com o FCL."
+            }
+        } else {
+            check(
+                context.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
+                    context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+            ) {
+                "Conceda as permissões de leitura e gravação dos arquivos para usar essa pasta com o FCL."
+            }
         }
         val uri = Uri.parse(uriText)
         require(uri.authority == "com.android.externalstorage.documents") {
