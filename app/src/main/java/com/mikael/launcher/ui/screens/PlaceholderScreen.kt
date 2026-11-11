@@ -239,6 +239,8 @@ private fun VersionsScreen() {
     var installProgress by remember { mutableStateOf<MinecraftInstallProgress?>(null) }
     var installError by remember { mutableStateOf<String?>(null) }
     var loaderVersions by remember { mutableStateOf<List<com.mikael.launcher.engine.java.LoaderRelease>>(emptyList()) }
+    var forgeVersions by remember { mutableStateOf<List<com.mikael.launcher.engine.java.LoaderRelease>>(emptyList()) }
+    var selectedForgeVersion by rememberSaveable { mutableStateOf("") }
     var selectedLoaderVersion by rememberSaveable { mutableStateOf("") }
     var loaderCatalogMessage by remember { mutableStateOf("") }
     var installedVersion by rememberSaveable { mutableStateOf("") }
@@ -281,9 +283,33 @@ private fun VersionsScreen() {
             "Forge" -> com.mikael.launcher.fcl.FclModLoader.FORGE
             "NeoForge" -> com.mikael.launcher.fcl.FclModLoader.NEOFORGE
             "OptiFine" -> com.mikael.launcher.fcl.FclModLoader.OPTIFINE
+            "Forge + OptiFine" -> null
             else -> null
         }
-        if (fabricBackend == null && fclBackend == null) {
+        if (selectedLoader == "Forge + OptiFine") {
+            loaderCatalogMessage = "Consultando versões compatíveis de Forge e OptiFine..."
+            try {
+                val forge = com.mikael.launcher.fcl.FclModLoaderInstaller.availableVersions(context, selectedVersion, com.mikael.launcher.fcl.FclModLoader.FORGE)
+                    .map { com.mikael.launcher.engine.java.LoaderRelease(it.version, it.stable) }
+                val optifine = com.mikael.launcher.fcl.FclModLoaderInstaller.availableVersions(context, selectedVersion, com.mikael.launcher.fcl.FclModLoader.OPTIFINE)
+                    .map { com.mikael.launcher.engine.java.LoaderRelease(it.version, it.stable) }
+                forgeVersions = forge
+                loaderVersions = optifine
+                selectedForgeVersion = forge.firstOrNull()?.version.orEmpty()
+                selectedLoaderVersion = optifine.firstOrNull()?.version.orEmpty()
+                loaderCatalogMessage = if (forge.isEmpty() || optifine.isEmpty()) {
+                    "Não há versões publicadas dos dois componentes para Minecraft $selectedVersion."
+                } else {
+                    "Selecione uma versão de Forge e uma versão de OptiFine. O patch será aplicado nessa ordem."
+                }
+            } catch (error: Exception) {
+                forgeVersions = emptyList()
+                loaderVersions = emptyList()
+                selectedForgeVersion = ""
+                selectedLoaderVersion = ""
+                loaderCatalogMessage = error.message ?: "Falha ao consultar os catálogos Forge/OptiFine."
+            }
+        } else if (fabricBackend == null && fclBackend == null) {
             loaderVersions = emptyList()
             selectedLoaderVersion = ""
             loaderCatalogMessage = if (selectedLoader == "Vanilla") "" else
@@ -331,7 +357,17 @@ private fun VersionsScreen() {
         try {
             val entry = catalog.firstOrNull { it.id == selectedVersion }
                 ?: error("A versão selecionada não está disponível no catálogo oficial.")
-            if (selectedLoader in setOf("Forge", "NeoForge", "OptiFine")) {
+            if (selectedLoader == "Forge + OptiFine") {
+                val forgeVersion = selectedForgeVersion.takeIf { it.isNotBlank() }
+                    ?: error("Selecione uma versão de Forge compatível.")
+                val optiFineVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
+                    ?: error("Selecione uma versão de OptiFine compatível.")
+                val result = com.mikael.launcher.fcl.FclModLoaderInstaller.installForgeOptiFine(
+                    context, entry.id, forgeVersion, optiFineVersion
+                )
+                saveProfiles(profiles + result.profileId, result.profileId)
+                installedVersion = result.profileId
+            } else if (selectedLoader in setOf("Forge", "NeoForge", "OptiFine")) {
                 val backend = when (selectedLoader) {
                     "Forge" -> com.mikael.launcher.fcl.FclModLoader.FORGE
                     "NeoForge" -> com.mikael.launcher.fcl.FclModLoader.NEOFORGE
@@ -489,7 +525,7 @@ private fun VersionsScreen() {
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                listOf("Vanilla", "Forge", "NeoForge", "Fabric", "Legacy Fabric", "Quilt", "OptiFine", "LiteLoader", "Rift").forEach { loader ->
+                listOf("Vanilla", "Forge", "NeoForge", "Fabric", "Legacy Fabric", "Quilt", "OptiFine", "Forge + OptiFine", "LiteLoader", "Rift").forEach { loader ->
                     FilterChip(
                         selected = selectedLoader == loader,
                         onClick = {
@@ -503,14 +539,24 @@ private fun VersionsScreen() {
             Text(
                 when (selectedLoader) {
                     "Vanilla" -> "Vanilla: instalação oficial do cliente e dependências."
-                    "OptiFine" -> "OptiFine: patcher gráfico instalado pelo mecanismo FCL. Combinações com Forge ainda não são oferecidas nesta tela."
+                    "OptiFine" -> "OptiFine: patcher gráfico instalado pelo mecanismo FCL."
+                    "Forge + OptiFine" -> loaderCatalogMessage
                     "Fabric", "Quilt", "Forge", "NeoForge" -> loaderCatalogMessage
                     else -> "$selectedLoader: instalador específico ainda não integrado. Não será exibido como instalável."
                 },
-                color = if (selectedLoader in setOf("Vanilla", "Fabric", "Quilt", "Forge", "NeoForge", "OptiFine")) TextSecondary else AccentYellow,
+                color = if (selectedLoader in setOf("Vanilla", "Fabric", "Quilt", "Forge", "NeoForge", "OptiFine", "Forge + OptiFine")) TextSecondary else AccentYellow,
                 fontSize = 10.sp
             )
-            if (selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine")) {
+            if (selectedLoader == "Forge + OptiFine") {
+                SectionLabel("VERSÃO DO FORGE")
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    forgeVersions.take(8).forEach { release ->
+                        FilterChip(selected = selectedForgeVersion == release.version, onClick = { selectedForgeVersion = release.version }, label = { Text(release.version, fontSize = 9.sp) })
+                    }
+                }
+                SectionLabel("VERSÃO DO OPTIFINE")
+            }
+            if (selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine", "Forge + OptiFine")) {
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -528,13 +574,13 @@ private fun VersionsScreen() {
                 text = when {
                     installRequested -> "Instalando..."
                     selectedLoader == "Vanilla" -> "⬇  Baixar e instalar Vanilla"
-                    selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine") -> "⬇  Instalar $selectedLoader"
+                    selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine", "Forge + OptiFine") -> "⬇  Instalar $selectedLoader"
                     else -> "$selectedLoader indisponível"
                 },
                 onClick = {
                     if (!installRequested) {
                         if (selectedLoader == "Vanilla" ||
-                            selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine") && selectedLoaderVersion.isNotBlank()
+                            selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine") && selectedLoaderVersion.isNotBlank() || selectedLoader == "Forge + OptiFine" && selectedForgeVersion.isNotBlank() && selectedLoaderVersion.isNotBlank()
                         ) {
                             installRequested = true
                         } else {
