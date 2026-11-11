@@ -74,14 +74,15 @@ class MinecraftInstallerTest {
     @Test
     fun evaluatesOrderedOsRulesAndLastMatchingRuleWins() {
         val library = JSONObject(
+            """{"rules":[
                 {"action":"allow","os":{"name":"linux","version":"^5\\."}},
                 {"action":"disallow","os":{"name":"linux","arch":"x86_64"}},
                 {"action":"allow","os":{"name":"linux","arch":"aarch64","version":"^5\\."}}
             ]}"""
-            ]}"""
         )
         assertEquals(true, minecraftLibraryApplies(library, "linux", "aarch64", "5.15.0"))
         assertEquals(false, minecraftLibraryApplies(library, "linux", "x86_64", "5.15.0"))
+        assertEquals(false, minecraftLibraryApplies(library, "linux", "aarch64", "6.1.0"))
         assertEquals(false, minecraftLibraryApplies(library, "linux", "aarch64", "6.1.0"))
     }
 
