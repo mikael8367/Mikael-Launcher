@@ -17,7 +17,7 @@ A pesquisa usa o ID da versão. O manifesto é a fonte da URL e do SHA-1 do JSON
 
 ## Instalação oficial implementada
 
-`MinecraftInstaller` grava no diretório privado do aplicativo (`filesDir/minecraft`) e:
+`MinecraftInstaller` grava no diretório de jogo resolvido por `FclGameDirectoryResolver`: por padrão `filesDir/minecraft`; quando o usuário escolhe uma pasta local compatível, usa esse caminho tanto para Vanilla quanto para Fabric/Quilt. O perfil ativo do FCL é apontado para o mesmo diretório.
 
 1. Baixa e valida o JSON da versão pelo SHA-1 do manifesto.
 2. Baixa o client JAR e verifica SHA-1/tamanho quando fornecidos.
@@ -33,6 +33,17 @@ A pesquisa usa o ID da versão. O manifesto é a fonte da URL e do SHA-1 do JSON
 12. Só cadastra a instalação na lista do launcher depois que todas as tarefas terminam com sucesso.
 
 Downloads usam HTTPS; redirecionamento para HTTP é rejeitado. Os caminhos de destino são normalizados e impedidos de escapar da pasta do jogo.
+
+
+## Diretório de jogo personalizado e permissões Android
+
+- A tela Configurações permite escolher uma pasta com o seletor SAF do Android e persiste a autorização de leitura/gravação.
+- Para que os instaladores baseados em `File` e o FCL usem o caminho diretamente, o diretório precisa estar em armazenamento local compartilhado. Provedores de nuvem e pastas protegidas do Android não são aceitos como diretório de jogo.
+- Android 11+: a aplicação solicita que o usuário habilite **Acesso a todos os arquivos** na tela especial do sistema. Android 8–10: solicita leitura e gravação de armazenamento em tempo de execução.
+- A pasta escolhida é usada por `MinecraftInstaller`, `ModLoaderProfileInstaller` e pelo `Profiles.getSelectedProfile().gameDir` do FCL. Alterar a seleção após a inicialização atualiza o perfil ativo.
+- O botão **Migrar versões e arquivos existentes** copia arquivos ausentes do antigo `filesDir/minecraft` e do antigo diretório privado do FCL para a pasta atual. Arquivos que já existem no destino são preservados e não são sobrescritos.
+- Os runtimes Java, bibliotecas nativas do launcher e arquivos internos do FCL continuam no armazenamento privado do aplicativo; somente o diretório de jogo (versões, libraries, assets, mods, resourcepacks, shaderpacks e saves) é redirecionado.
+- O usuário pode voltar ao diretório padrão. O aplicativo não apaga automaticamente a pasta anterior ao trocar de local.
 
 ## Mod loaders e estado real dos instaladores
 
