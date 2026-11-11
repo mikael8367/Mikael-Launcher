@@ -131,7 +131,7 @@ internal fun GameStorageLocationPanel() {
         }
     }
 
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, selectedUri) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasFileAccess = checkFileAccess(context)
