@@ -69,7 +69,7 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
     mut env: JNIEnv,
     _class: JClass,
 ) -> jstring {
-    let capabilities = r#"{"abi":"arm64-v8a","jni":true,"nativeActivity":true,"winit":true,"wgpu":true,"vulkan":"runtime-detected","gles":"runtime-detected","touchInput":false,"minecraftRuntime":false}"#;
+    let capabilities = r#"{"abi":"arm64-v8a","jni":true,"nativeActivity":true,"winit":true,"wgpu":true,"graphicsApi":"auto","gpuValidated":false,"touchInput":false,"minecraftRuntime":false}"#;
 
     env.new_string(capabilities)
         .map(|value| value.into_raw())
