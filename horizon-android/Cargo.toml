@@ -10,3 +10,10 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 jni = "0.21.1"
+
+[target.'cfg(target_os = "android")'.dependencies]
+# Winit's NativeActivity glue is the Android entry point for the graphics test.
+winit = { version = "0.30.13", default-features = false, features = ["android-native-activity", "rwh_06"] }
+# Enable Vulkan and GLES; runtime selection is delegated to wgpu's adapter discovery.
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "vulkan", "gles"] }
+pollster = "0.4"
