@@ -41,6 +41,7 @@ import com.mikael.launcher.fcl.buildLaunchDiagnostic
 import com.mikael.launcher.fcl.parseMemoryMB
 import com.mikael.launcher.fcl.runtimeFolderForLabel
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,6 +92,28 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
     var launchDialogMessage by remember { mutableStateOf<String?>(null) }
     var launchDiagnostic by remember { mutableStateOf<String?>(null) }
     var diagnosticCopied by remember { mutableStateOf(false) }
+    var isRefreshingVersions by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        try {
+            val actualProfiles = FclGameLaunchCoordinator.installedVersionIds(context.applicationContext)
+            if (actualProfiles.isNotEmpty()) {
+                versionProfiles = actualProfiles
+                val saved = prefs.getString(SELECTED_VERSION_PROFILE, "").orEmpty()
+                selectedVersion = saved.takeIf { it in actualProfiles } ?: actualProfiles.first()
+                prefs.edit()
+                    .putString(INSTALLED_VERSION_PROFILES, actualProfiles.joinToString("\n"))
+                    .putString(SELECTED_VERSION_PROFILE, selectedVersion)
+                    .apply()
+            }
+        } catch (_: Exception) {
+            // Keep the last saved selection visible; the launch dialog will show
+            // the detailed FCL diagnostic if the profile cannot be resolved.
+        } finally {
+            isRefreshingVersions = false
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -120,6 +143,10 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
             onChooseVersion = { showVersionPicker = true },
             onStart = {
                 when {
+                    isRefreshingVersions -> {
+                        launchDialogMessage = "Aguarde: verificando as versões instaladas no FCL."
+                        launchDiagnostic = null
+                    }
                     selectedVersion.isBlank() -> {
                         launchDialogMessage = "Selecione uma versão instalada antes de iniciar."
                         launchDiagnostic = null
