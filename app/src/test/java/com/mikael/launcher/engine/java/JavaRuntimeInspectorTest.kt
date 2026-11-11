@@ -31,6 +31,34 @@ class JavaRuntimeInspectorTest {
     }
 
     @Test
+    fun nonExecutableJavaBinaryIsRejected() {
+        val root = createRuntime("17.0.12", elfClass = 2, machine = 183)
+        try {
+            File(root, "bin/java").setExecutable(false)
+            val result = JavaRuntimeInspector.inspect(root, "arm64-v8a")
+            assertTrue(result is JavaRuntimeInspection.Invalid)
+            assertEquals("java_not_executable", (result as JavaRuntimeInspection.Invalid).reasonCode)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun javaExecutableWithWrongElfArchitectureIsRejected() {
+        val root = createRuntime("17.0.12", elfClass = 2, machine = 183)
+        try {
+            val java = File(root, "bin/java")
+            java.writeBytes(elfHeader(2, 62))
+            java.setExecutable(true)
+            val result = JavaRuntimeInspector.inspect(root, "arm64-v8a")
+            assertTrue(result is JavaRuntimeInspection.Invalid)
+            assertEquals("java_abi_mismatch", (result as JavaRuntimeInspection.Invalid).reasonCode)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun missingJvmLibraryIsRejected() {
         val root = createRuntime("21.0.4", elfClass = 2, machine = 183)
         try {
@@ -59,9 +87,16 @@ class JavaRuntimeInspectorTest {
         val root = createTempDir(prefix = "mikael-runtime-test-")
         File(root, "release").writeText("JAVA_VERSION=\"$version\"\n")
         File(root, "bin").mkdirs()
-        File(root, "bin/java").writeBytes(byteArrayOf(0x01, 0x02, 0x03))
+        val java = File(root, "bin/java")
+        java.writeBytes(elfHeader(elfClass, machine))
+        java.setExecutable(true)
         val jvm = File(root, "lib/server/libjvm.so")
         jvm.parentFile?.mkdirs()
+        jvm.writeBytes(elfHeader(elfClass, machine))
+        return root
+    }
+
+    private fun elfHeader(elfClass: Int, machine: Int): ByteArray {
         val header = ByteArray(20)
         header[0] = 0x7f
         header[1] = 'E'.code.toByte()
@@ -71,7 +106,6 @@ class JavaRuntimeInspectorTest {
         header[5] = 1
         header[18] = (machine and 0xff).toByte()
         header[19] = ((machine shr 8) and 0xff).toByte()
-        jvm.writeBytes(header)
-        return root
+        return header
     }
 }
