@@ -1,6 +1,7 @@
 package com.mikael.launcher.fcl
 
 import android.content.Context
+import com.tungsten.fcl.game.FCLGameRepository
 import com.tungsten.fcl.setting.Profiles
 import com.tungsten.fclcore.game.GameComponentType
 import com.tungsten.fclcore.task.Task
@@ -80,7 +81,10 @@ object FclModLoaderInstaller {
             .orElseThrow { IllegalArgumentException("A versão $loaderVersion de ${loader.patchId} não está disponível para Minecraft $minecraftVersion.") }
 
         val profileId = buildProfileId(minecraftVersion, loader, loaderVersion)
-        require(!profile.repository.hasVersion(profileId) && !File(selectedDirectory, "versions/$profileId").exists()) {
+        require(FCLGameRepository.isValidVersionId(profileId)) {
+            "O identificador gerado para o perfil não é aceito pelo FCL."
+        }
+        require(!profile.repository.versionIdConflicts(profileId) && !File(selectedDirectory, "versions/$profileId").exists()) {
             "O perfil $profileId já existe. Escolha outra versão ou remova o perfil antigo."
         }
 
