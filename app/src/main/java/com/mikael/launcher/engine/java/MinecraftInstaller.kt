@@ -127,7 +127,6 @@ class MinecraftInstaller(
         }
 
         ensureDirectory(versionRoot, "pasta da versão")
-        writeAtomically(versionJson, metadataText.toByteArray(Charsets.UTF_8))
 
         val uniqueTasks = tasks.groupBy { it.target.canonicalPath }.values.map { duplicates ->
             val hashes = duplicates.mapNotNull { it.sha1?.lowercase() }.distinct()
@@ -185,14 +184,14 @@ class MinecraftInstaller(
                     if (!source.isFile) error("Asset ausente após download: ${asset.name}")
                     if (virtualLegacy) {
                         val target = safeResolve(root, "assets/virtual/legacy/${asset.name}")
-                        if (!target.isFile || target.length() != source.length()) {
+                        if (!isValid(target, asset.hash, asset.size)) {
                             target.parentFile?.let { ensureDirectory(it, "pasta de assets legados") }
                             source.copyTo(target, overwrite = true)
                         }
                     }
                     if (mapToResources) {
                         val target = safeResolve(root, "assets/resources/${asset.name}")
-                        if (!target.isFile || target.length() != source.length()) {
+                        if (!isValid(target, asset.hash, asset.size)) {
                             target.parentFile?.let { ensureDirectory(it, "pasta de resources legados") }
                             source.copyTo(target, overwrite = true)
                         }
@@ -200,6 +199,10 @@ class MinecraftInstaller(
                 }
             }
         }
+
+        // Publish the version metadata only after every required artifact and
+        // legacy alias is present. A failed/interrupted install must not look installed.
+        writeAtomically(versionJson, metadataText.toByteArray(Charsets.UTF_8))
 
         MinecraftInstallResult(versionId, versionRoot, completed.get())
     }
