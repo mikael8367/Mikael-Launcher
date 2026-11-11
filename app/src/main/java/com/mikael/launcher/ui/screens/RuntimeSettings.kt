@@ -103,6 +103,11 @@ fun RuntimeSettingsPanel() {
                 }
             }
         }
+        Text(
+            "Aplicados ao iniciar: GL4ES, Zink e VirGL. As demais opções (ANGLE, Vulkan experimental e Software) ainda não têm equivalente no motor FCL e serão ignoradas até a integração.",
+            color = TextSecondary,
+            fontSize = 10.sp
+        )
         Text("MEMÓRIA E PARÂMETROS", color = PrimaryGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("1024 MB", "1536 MB", "2048 MB", "3072 MB").forEach { option ->
@@ -115,6 +120,11 @@ fun RuntimeSettingsPanel() {
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Argumentos JVM") },
             minLines = 2
+        )
+        Text(
+            "A memória escolhida vale quando \"Gerenciamento automático de RAM\" está desligado (aba Desempenho). Os limites -Xms/-Xmx digitados aqui são administrados pelo launcher para não conflitar com a memória selecionada.",
+            color = TextSecondary,
+            fontSize = 10.sp
         )
         val runtimeFolder = when (runtime) {
             "Java 8" -> "jre8"

@@ -36,7 +36,10 @@ import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.mikael.launcher.fcl.FclGameLaunchCoordinator
+import com.mikael.launcher.fcl.FclLaunchPreferences
 import com.mikael.launcher.fcl.buildLaunchDiagnostic
+import com.mikael.launcher.fcl.parseMemoryMB
+import com.mikael.launcher.fcl.runtimeFolderForLabel
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -133,9 +136,22 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
                         isLaunching = true
                         launchDialogMessage = "Preparando a versão, verificando bibliotecas e iniciando o motor Java do FCL..."
                         launchDiagnostic = null
+                        diagnosticCopied = false
+                        // Preferências escolhidas em Configurações (runtime Java,
+                        // renderizador, RAM e argumentos JVM) passam a valer na
+                        // inicialização; chaves desconhecidas ficam nulas e o FCL
+                        // mantém seus próprios valores.
+                        val appPrefs = context.getSharedPreferences(VERSION_PREFS, Context.MODE_PRIVATE)
+                        val launchPreferences = FclLaunchPreferences(
+                            runtimeFolder = runtimeFolderForLabel(appPrefs.getString(PREF_RUNTIME, null)),
+                            rendererLabel = appPrefs.getString(PREF_RENDERER, null),
+                            memoryMB = parseMemoryMB(appPrefs.getString(PREF_RAM, null)),
+                            autoMemory = appPrefs.getBoolean("perf_auto_ram", true),
+                            javaArgs = appPrefs.getString(PREF_JVM_ARGS, null)
+                        )
                         hostActivity.lifecycleScope.launch {
                             try {
-                                FclGameLaunchCoordinator.launch(hostActivity, selectedVersion, selectedAccount)
+                                FclGameLaunchCoordinator.launch(hostActivity, selectedVersion, selectedAccount, launchPreferences)
                                 launchDialogMessage = null
                             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                                 throw cancelled
@@ -416,4 +432,3 @@ private tailrec fun findHostActivity(context: Context): Activity? = when (contex
     is ContextWrapper -> findHostActivity(context.baseContext)
     else -> null
 }
-
