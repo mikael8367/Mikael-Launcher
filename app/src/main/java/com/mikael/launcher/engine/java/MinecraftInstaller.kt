@@ -270,7 +270,8 @@ class MinecraftInstaller(
     }
 
     private fun isValid(file: File, expectedSha1: String?, expectedSize: Long?): Boolean {
-        if (!file.isFile || file.length() == 0L) return false
+        if (!file.isFile) return false
+        if (file.length() == 0L && expectedSize != 0L) return false
         if (expectedSize != null && file.length() != expectedSize) return false
         return expectedSha1.isNullOrBlank() || sha1(file) == expectedSha1.lowercase()
     }
