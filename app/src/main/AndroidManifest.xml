@@ -3,9 +3,11 @@
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <application
-        tools:replace="android:allowBackup,android:label"
+        tools:replace="android:allowBackup,android:label,android:icon,android:roundIcon"
         android:name="com.tungsten.fcl.FCLApp"
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:label="Mikael Launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.FoldCraftLauncher">
@@ -20,14 +22,8 @@
             </intent-filter>
         </activity>
         <!-- Do not expose the upstream FCL launcher UI; Mikael Launcher owns the entry screen. -->
-        <activity
-            android:name="com.tungsten.fcl.activity.SplashActivity"
-            tools:node="remove" />
-        <activity
-            android:name="com.tungsten.fcl.activity.MainActivity"
-            tools:node="remove" />
-        <activity-alias
-            android:name="com.tungsten.fcl.ImportActivity"
-            tools:node="remove" />
+        <activity android:name="com.tungsten.fcl.activity.SplashActivity" tools:node="remove" />
+        <activity android:name="com.tungsten.fcl.activity.MainActivity" tools:node="remove" />
+        <activity-alias android:name="com.tungsten.fcl.ImportActivity" tools:node="remove" />
     </application>
 </manifest>
