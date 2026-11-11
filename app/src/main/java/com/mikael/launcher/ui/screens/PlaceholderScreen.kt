@@ -561,7 +561,7 @@ private fun VersionsScreen() {
     }
     if (showInfo) InfoDialog(
         "Instalação concluída",
-        "O perfil $installedVersion foi instalado no armazenamento privado do launcher. A inicialização real ainda depende da integração do runtime ARM64 e do adaptador FCL."
+        "O perfil $installedVersion foi instalado na pasta de jogo selecionada. A inicialização real ainda depende da conclusão e validação do fluxo de lançamento FCL."
     ) { showInfo = false }
 }
 
