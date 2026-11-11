@@ -102,36 +102,30 @@ internal object MinecraftInstallSession {
     var finishedProfileId by mutableStateOf<String?>(null)
         private set
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-    /** Executa a instalação fora da composição. Ignora chamadas concorrentes. */
-    fun start(work: suspend () -> String) {
+    fun beginExternal() {
         if (inProgress) return
         inProgress = true
         error = null
         progress = null
-        scope.launch {
-            try {
-                finishedProfileId = work()
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Exception) {
-                error = failure.message ?: "Falha desconhecida durante a instalação."
-            } finally {
-                inProgress = false
-            }
-        }
+        finishedProfileId = null
     }
 
-    /** Consome o perfil concluído (chamar uma única vez a partir da UI). */
+    fun completeExternal(profileId: String) {
+        finishedProfileId = profileId
+        inProgress = false
+    }
+
+    fun failExternal(message: String) {
+        error = message
+        inProgress = false
+    }
+
     fun consumeResult(): String? = finishedProfileId.also { finishedProfileId = null }
 
-    /** Registra um erro de validação detectado na UI antes de iniciar. */
     fun reportError(message: String) {
         error = message
     }
 
-    /** Publica o progresso vindo dos instaladores (chamado no callback deles). */
     fun reportProgress(value: MinecraftInstallProgress?) {
         progress = value
     }
@@ -459,61 +453,20 @@ private fun VersionsScreen() {
         val installCatalog = catalog.toList()
         val installedProfiles = profiles.toList()
         val applicationContext = context.applicationContext
-        MinecraftInstallSession.start {
-            val entry = installCatalog.firstOrNull { it.id == installVersion }
-                ?: error("A versão selecionada não está disponível no catálogo oficial.")
-            if (installLoader == "Forge + OptiFine") {
-                val forgeVersion = installForgeVersion.takeIf { it.isNotBlank() }
-                    ?: error("Selecione uma versão de Forge compatível.")
-                val optiFineVersion = installLoaderVersion.takeIf { it.isNotBlank() }
-                    ?: error("Selecione uma versão de OptiFine compatível.")
-                val result = com.mikael.launcher.fcl.FclModLoaderInstaller.installForgeOptiFine(
-                    applicationContext, entry.id, forgeVersion, optiFineVersion
-                )
-                saveProfiles(installedProfiles + result.profileId, result.profileId)
-                result.profileId
-            } else if (installLoader in setOf("Forge", "NeoForge", "OptiFine")) {
-                val backend = when (installLoader) {
-                    "Forge" -> com.mikael.launcher.fcl.FclModLoader.FORGE
-                    "NeoForge" -> com.mikael.launcher.fcl.FclModLoader.NEOFORGE
-                    else -> com.mikael.launcher.fcl.FclModLoader.OPTIFINE
-                }
-                val loaderVersion = installLoaderVersion.takeIf { it.isNotBlank() }
-                    ?: error("Não há uma versão compatível de $installLoader selecionada.")
-                val result = com.mikael.launcher.fcl.FclModLoaderInstaller.install(
-                    applicationContext, entry.id, backend, loaderVersion
-                )
-                saveProfiles(installedProfiles + result.profileId, result.profileId)
-                result.profileId
-            } else {
-                val gameDir = FclGameDirectoryResolver.resolve(applicationContext)
-                MinecraftInstaller(gameDir).install(
-                    versionId = entry.id,
-                    metadataUrl = entry.url,
-                    metadataSha1 = entry.sha1
-                ) { progress ->
-                    MinecraftInstallSession.reportProgress(progress)
-                }
-                if (installLoader == "Vanilla") {
-                    com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(applicationContext, entry.id)
-                    saveProfiles(installedProfiles + entry.id, entry.id)
-                    entry.id
-                } else {
-                    val backend = when (installLoader) {
-                        "Fabric" -> com.mikael.launcher.engine.java.SupportedProfileLoader.FABRIC
-                        "Quilt" -> com.mikael.launcher.engine.java.SupportedProfileLoader.QUILT
-                        else -> error("O instalador real de $installLoader ainda não está integrado.")
-                    }
-                    val loaderVersion = installLoaderVersion.takeIf { it.isNotBlank() }
-                        ?: error("Não há uma versão compatível de $installLoader selecionada.")
-                    val result = com.mikael.launcher.engine.java.ModLoaderProfileInstaller(gameDir)
-                        .install(entry.id, backend, loaderVersion)
-                    com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(applicationContext, result.profileId)
-                    saveProfiles(installedProfiles + result.profileId, result.profileId)
-                    result.profileId
-                }
-            }
-        }
+        com.mikael.launcher.engine.java.MinecraftInstallForegroundService.start(
+            context = applicationContext,
+            minecraftVersion = installVersion,
+            metadataUrl = installCatalog.firstOrNull { it.id == installVersion }?.url
+                ?: run {
+                    MinecraftInstallSession.reportError("A versão selecionada não está disponível no catálogo oficial.")
+                    return
+                },
+            metadataSha1 = installCatalog.first { it.id == installVersion }.sha1,
+            loader = installLoader,
+            loaderVersion = installLoaderVersion,
+            forgeVersion = installForgeVersion,
+            installedProfiles = installedProfiles
+        )
     }
 
     val filteredVersions = remember(catalog, selectedTab, searchText) {
