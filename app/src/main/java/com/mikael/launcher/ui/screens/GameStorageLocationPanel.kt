@@ -1,26 +1,34 @@
 package com.mikael.launcher.ui.screens
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.documentfile.provider.DocumentFile
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.mikael.launcher.ui.theme.PrimaryGreen
 import com.mikael.launcher.ui.theme.TextPrimary
 import com.mikael.launcher.ui.theme.TextSecondary
@@ -28,11 +36,13 @@ import com.mikael.launcher.ui.theme.TextSecondary
 @Composable
 internal fun GameStorageLocationPanel() {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val prefs = remember { context.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE) }
     var selectedUri by remember { mutableStateOf(prefs.getString(PREF_GAME_TREE_URI, null)) }
     var folderName by remember { mutableStateOf("Armazenamento interno do aplicativo") }
     var status by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<String>>(emptyList()) }
+    var hasFileAccess by remember { mutableStateOf(checkFileAccess(context)) }
 
     fun refresh(uriString: String?) {
         val folders = listOf("versions", "libraries", "assets", "mods", "resourcepacks", "shaderpacks", "saves")
@@ -61,10 +71,10 @@ internal fun GameStorageLocationPanel() {
         }
         val installed = tree.findFile("versions")?.listFiles()?.filter { it.isDirectory }?.mapNotNull { it.name }.orEmpty()
         entries = entries + if (installed.isEmpty()) listOf("Nenhuma versão encontrada") else installed.map { "Versão: $it" }
-        status = "Pasta selecionada e permissão persistida."
+        status = "Pasta selecionada e permissão de leitura e gravação persistida."
     }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
@@ -72,18 +82,48 @@ internal fun GameStorageLocationPanel() {
                 prefs.edit().putString(PREF_GAME_TREE_URI, uri.toString()).apply()
                 refresh(uri.toString())
             } catch (error: Exception) {
-                status = "Falha ao salvar permissão: ${error.message}"
+                status = "Falha ao salvar permissão da pasta: ${error.message}"
             }
         }
     }
+    val legacyPermissionRequest = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        hasFileAccess = result[Manifest.permission.READ_EXTERNAL_STORAGE] == true && result[Manifest.permission.WRITE_EXTERNAL_STORAGE] == true
+        status = if (hasFileAccess) "Permissão de arquivos concedida." else "Permissão não concedida. Você ainda pode escolher uma pasta pelo seletor."
+    }
 
+    fun requestFileAccess() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            if (!Environment.isExternalStorageManager()) {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                }
+                runCatching { context.startActivity(intent) }.onFailure {
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                }
+            }
+        } else {
+            legacyPermissionRequest.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE))
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) hasFileAccess = checkFileAccess(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     LaunchedEffect(selectedUri) { refresh(selectedUri) }
+
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text("PASTA DO MINECRAFT", color = PrimaryGreen, fontSize = 10.sp)
         Text("Local atual: $folderName", color = TextPrimary, fontSize = 12.sp)
+        Text(if (hasFileAccess) "Acesso amplo aos arquivos: permitido" else "Acesso amplo aos arquivos: não concedido", color = if (hasFileAccess) PrimaryGreen else TextSecondary, fontSize = 10.sp)
+        OutlinedButton(onClick = { requestFileAccess() }) { Text(if (hasFileAccess) "Gerenciar permissão de arquivos" else "Permitir acesso aos arquivos") }
+        Text("No Android 11 ou superior, o Android abre a tela especial de acesso a todos os arquivos. No Android 8 a 10, aparece a solicitação de leitura e gravação. A permissão é opcional quando você usa apenas a pasta escolhida pelo seletor.", color = TextSecondary, fontSize = 10.sp)
         Text(status, color = TextSecondary, fontSize = 10.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedButton(onClick = { picker.launch(null) }) { Text("Escolher pasta") }
+            OutlinedButton(onClick = { folderPicker.launch(null) }) { Text("Escolher pasta") }
             OutlinedButton(onClick = {
                 selectedUri = null
                 prefs.edit().remove(PREF_GAME_TREE_URI).apply()
@@ -92,9 +132,12 @@ internal fun GameStorageLocationPanel() {
         }
         Text("Conteúdo reconhecido", color = TextPrimary, fontSize = 11.sp)
         entries.forEach { Text("• $it", color = TextSecondary, fontSize = 10.sp) }
-        Text(
-            "A seleção e a permissão ficam salvas. A migração dos downloads e a integração com o FCL ainda precisam ser conectadas; por enquanto, as instalações continuam usando a pasta padrão privada.",
-            color = TextSecondary, fontSize = 10.sp
-        )
+        Text("A seleção SAF já guarda a autorização específica da pasta. O acesso amplo é uma permissão separada; a migração dos instaladores e do FCL para usar a pasta externa ainda precisa ser concluída.", color = TextSecondary, fontSize = 10.sp)
     }
+}
+
+private fun checkFileAccess(context: Context): Boolean = when {
+    Build.VERSION.SDK_INT >= 30 -> Environment.isExternalStorageManager()
+    else -> ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
+        ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
 }
