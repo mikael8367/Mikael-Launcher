@@ -26,7 +26,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
+import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import com.mikael.launcher.fcl.FclGameLaunchCoordinator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,8 +65,9 @@ private const val INSTALLED_VERSION_PROFILES = "launcher_installed_version_profi
 private const val SELECTED_VERSION_PROFILE = "launcher_selected_version_profile"
 
 @Composable
-fun HomeScreen(onNavigate: (LauncherSection) -> Unit) {
+fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
     val context = LocalContext.current
+    val hostActivity = remember(context) { findHostActivity(context) as? ComponentActivity }
     val prefs = remember { context.getSharedPreferences(VERSION_PREFS, Context.MODE_PRIVATE) }
     var versionProfiles by remember {
         mutableStateOf(prefs.getString(INSTALLED_VERSION_PROFILES, "").orEmpty().split("\n").filter { it.isNotBlank() })
@@ -73,7 +80,8 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit) {
         )
     }
     var showVersionPicker by remember { mutableStateOf(false) }
-    var showStartNotice by remember { mutableStateOf(false) }
+    var isLaunching by remember { mutableStateOf(false) }
+    var launchDialogMessage by remember { mutableStateOf<String?>(null) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -101,7 +109,33 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit) {
         HeroPanel(
             selectedVersion = selectedVersion,
             onChooseVersion = { showVersionPicker = true },
-            onStart = { showStartNotice = true },
+            onStart = {
+                when {
+                    selectedVersion.isBlank() -> {
+                        launchDialogMessage = "Selecione uma versão instalada antes de iniciar."
+                    }
+                    selectedAccount.isBlank() -> {
+                        launchDialogMessage = "Selecione ou adicione uma conta offline na aba Contas."
+                    }
+                    hostActivity == null -> {
+                        launchDialogMessage = "Não foi possível acessar a tela principal do Android."
+                    }
+                    else -> {
+                        isLaunching = true
+                        launchDialogMessage = "Preparando a versão, verificando bibliotecas e iniciando o motor Java do FCL..."
+                        hostActivity.lifecycleScope.launch {
+                            try {
+                                FclGameLaunchCoordinator.launch(hostActivity, selectedVersion, selectedAccount)
+                                launchDialogMessage = null
+                            } catch (error: Throwable) {
+                                launchDialogMessage = error.message ?: "Falha desconhecida ao iniciar Minecraft."
+                            } finally {
+                                isLaunching = false
+                            }
+                        }
+                    }
+                }
+            },
             onExplore = { onNavigate(LauncherSection.VERSIONS) }
         )
 
@@ -188,18 +222,34 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit) {
             dismissButton = { TextButton(onClick = { showVersionPicker = false; onNavigate(LauncherSection.VERSIONS) }) { Text("Gerenciar versões") } }
         )
     }
-    if (showStartNotice) {
+    if (isLaunching || launchDialogMessage != null) {
         AlertDialog(
-            onDismissRequest = { showStartNotice = false },
-            title = { Text("Iniciar Minecraft") },
+            onDismissRequest = { if (!isLaunching) launchDialogMessage = null },
+            title = { Text(if (isLaunching) "Preparando Minecraft" else "Iniciar Minecraft") },
             text = {
-                Text(
-                    if (selectedVersion.isBlank()) "Selecione ou adicione uma versão antes de iniciar."
-                    else "A versão selecionada é $selectedVersion. O processo real de inicialização será conectado quando o motor Minecraft estiver integrado."
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (isLaunching) {
+                        androidx.compose.material3.CircularProgressIndicator()
+                    }
+                    Text(launchDialogMessage.orEmpty())
+                    if (!isLaunching && selectedAccount.isNotBlank()) {
+                        Text("Conta selecionada: $selectedAccount", color = TextSecondary)
+                    }
+                }
             },
-            confirmButton = { TextButton(onClick = { showStartNotice = false }) { Text("Entendi") } },
-            dismissButton = { TextButton(onClick = { showStartNotice = false; onNavigate(LauncherSection.VERSIONS) }) { Text("Versões") } }
+            confirmButton = {
+                if (!isLaunching) {
+                    TextButton(onClick = { launchDialogMessage = null }) { Text("Fechar") }
+                }
+            },
+            dismissButton = {
+                if (!isLaunching) {
+                    TextButton(onClick = {
+                        launchDialogMessage = null
+                        onNavigate(LauncherSection.VERSIONS)
+                    }) { Text("Versões") }
+                }
+            }
         )
     }
 }
@@ -315,4 +365,11 @@ private fun SmallAction(label: String, onClick: () -> Unit) {
     ) {
         Text(label, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
     }
+}
+
+
+private tailrec fun findHostActivity(context: Context): Activity? = when (context) {
+    is Activity -> context
+    is ContextWrapper -> findHostActivity(context.baseContext)
+    else -> null
 }
