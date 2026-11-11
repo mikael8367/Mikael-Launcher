@@ -97,20 +97,28 @@ object FclModLoaderInstaller {
 
         // OptiFineInstallTask explicitly expects a Forge launch wrapper. Install Forge first,
         // then apply OptiFine to that in-memory patched version and persist only the final profile.
-        val buildTask = dependency.gameBuilder()
+        // Run each FCL component task explicitly. GameBuilder.buildAsync() exposes a
+        // wildcard Task type to Kotlin, so chaining it directly loses the Version type.
+        // Keeping each result typed also guarantees the required Forge-before-OptiFine order.
+        val baseBuildTask = dependency.gameBuilder()
             .name(profileId)
             .gameVersion(minecraftVersion)
             .buildAsync()
-            .thenComposeAsync { baseVersion ->
-                dependency.installLibraryAsync(baseVersion, forgeRemote)
-            }
-            .thenComposeAsync { forgePatchedVersion ->
-                dependency.installLibraryAsync(forgePatchedVersion, optiFineRemote)
-            }
-            .thenComposeAsync { combinedVersion ->
-                profile.repository.saveAsync(combinedVersion)
-            }
-        awaitTask(buildTask)
+        awaitTask(baseBuildTask)
+        val baseVersion = baseBuildTask.result as? com.tungsten.fclcore.game.Version
+            ?: error("O FCL não retornou a versão-base do Minecraft.")
+
+        val forgeTask = dependency.installLibraryAsync(baseVersion, forgeRemote)
+        awaitTask(forgeTask)
+        val forgePatchedVersion = forgeTask.result
+            ?: error("O instalador Forge não retornou o perfil modificado.")
+
+        val optiFineTask = dependency.installLibraryAsync(forgePatchedVersion, optiFineRemote)
+        awaitTask(optiFineTask)
+        val combinedVersion = optiFineTask.result
+            ?: error("O instalador OptiFine não retornou o perfil combinado.")
+
+        awaitTask(profile.repository.saveAsync(combinedVersion))
 
         profile.repository.refreshVersions()
         require(profile.repository.hasVersion(profileId)) {
