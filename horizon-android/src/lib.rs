@@ -51,7 +51,7 @@ fn destroy_session(handle: i64) -> bool {
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBridge_nativeGetStatus(
-    mut env: JNIEnv,
+    env: JNIEnv,
     _class: JClass,
 ) -> jstring {
     let active_sessions = sessions().lock().map(|items| items.len()).unwrap_or(0);
