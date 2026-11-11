@@ -35,9 +35,9 @@ data class FclBootstrapStatus(
 /**
  * Initializes FCL's process-wide services without starting its original launcher UI.
  *
- * The order mirrors the pinned upstream SplashActivity: paths/logging, renderers,
- * Java discovery, controller layouts, then ConfigHolder (which initializes accounts
- * and profiles through Settings). All blocking disk work runs on Dispatchers.IO.
+ * The order mirrors the pinned upstream initialization flow: paths/logging,
+ * renderers, Java discovery, ConfigHolder (accounts and profiles), then controller
+ * layouts. All blocking disk work runs on Dispatchers.IO.
  */
 object FclEngineBootstrap {
     private val mutex = Mutex()
@@ -103,13 +103,13 @@ object FclEngineBootstrap {
 
                 RendererManager.init(appContext)
                 JavaManager.init()
-                Controllers.init()
 
-                // ConfigHolder.init() initializes Settings, Accounts, Profiles and
-                // schedules a guarded controller initialization in the background.
+                // Match upstream ordering: Settings/Accounts/Profiles are loaded
+                // before controller layouts are initialized.
                 if (!ConfigHolder.isInit()) {
                     ConfigHolder.init()
                 }
+                Controllers.init()
 
                 // A brand-new FCL profile defaults to shared external storage.
                 // Choose its app-private profile once, so first launch does not
