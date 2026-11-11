@@ -429,20 +429,23 @@ private fun VersionsScreen() {
 
         // Freeze every user choice before the background task starts. The worker
         // must not read Compose state again after the UI has moved on.
-        val installVersion = selectedVersion
-        val installLoader = selectedLoader
-        val installLoaderVersion = selectedLoaderVersion
-        val installForgeVersion = selectedForgeVersion
-        val installCatalog = catalog.toList()
-        val installedProfiles = profiles.toList()
-
-        val installable = installLoader == "Vanilla" ||
-            (installLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine") && installLoaderVersion.isNotBlank()) ||
-            (installLoader == "Forge + OptiFine" && installForgeVersion.isNotBlank() && installLoaderVersion.isNotBlank())
-        if (!installable) {
-            MinecraftInstallSession.reportError("$installLoader não possui um instalador compatível disponível para esta versão.")
+        val request = try {
+            com.mikael.launcher.engine.java.createModLoaderInstallRequest(
+                minecraftVersion = selectedVersion,
+                loader = selectedLoader,
+                loaderVersion = selectedLoaderVersion,
+                forgeVersion = selectedForgeVersion
+            )
+        } catch (error: IllegalArgumentException) {
+            MinecraftInstallSession.reportError(error.message ?: "Seleção de modloader inválida.")
             return
         }
+        val installVersion = request.minecraftVersion
+        val installLoader = request.loader
+        val installLoaderVersion = request.loaderVersion
+        val installForgeVersion = request.forgeVersion
+        val installCatalog = catalog.toList()
+        val installedProfiles = profiles.toList()
         val applicationContext = context.applicationContext
         MinecraftInstallSession.start {
             val entry = installCatalog.firstOrNull { it.id == installVersion }
