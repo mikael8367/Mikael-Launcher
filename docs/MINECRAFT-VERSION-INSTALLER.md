@@ -34,14 +34,25 @@ A pesquisa usa o ID da versão. O manifesto é a fonte da URL e do SHA-1 do JSON
 
 Downloads usam HTTPS; redirecionamento para HTTP é rejeitado. Os caminhos de destino são normalizados e impedidos de escapar da pasta do jogo.
 
-## Mod loaders exibidos na seleção de versão
+## Mod loaders e estado real dos instaladores
 
-A tela de versões agora permite escolher e memorizar Vanilla, Forge, NeoForge, Fabric, Legacy Fabric, Quilt, OptiFine, LiteLoader e Rift. Essa seleção é apenas a escolha do tipo de instalação: não cria um perfil loader nem baixa seus arquivos ainda. Cada loader precisa de um backend próprio para consultar versões compatíveis, validar metadados, resolver bibliotecas e aplicar seu formato de instalação.
+A tela de versões oferece Vanilla, Forge, NeoForge, Fabric, Legacy Fabric, Quilt, OptiFine, LiteLoader e Rift. A seleção visual não significa que todos estejam instalados.
 
-- Fabric e Quilt usam perfis JSON que precisam ser mesclados ao metadata Mojang.
-- Forge e NeoForge exigem tratamento de instalador/processors e suas bibliotecas específicas.
-- OptiFine e os loaders históricos exigem fluxos e compatibilidades por versão.
-- O botão de instalação permanece limitado ao Vanilla até esses fluxos serem implementados e testados; selecionar outro loader mostra explicitamente que o instalador está pendente.
+### Instaladores conectados nesta etapa
+
+- **Fabric:** consulta a API oficial Fabric Meta, lista versões compatíveis com o Minecraft selecionado, baixa o perfil JSON e as bibliotecas, valida HTTPS/SHA-1/tamanho quando declarados e gera um perfil que herda os metadados Mojang.
+- **Quilt:** usa o mesmo fluxo de perfil, consultando a API oficial Quilt Meta e preservando o perfil base do Minecraft.
+- Ambos instalam primeiro a versão Vanilla correspondente. O perfil derivado só é cadastrado depois que os downloads e a gravação do JSON terminam com sucesso.
+
+O merge preserva as bibliotecas do Minecraft, adiciona as bibliotecas do loader, combina os argumentos de inicialização e rejeita identificadores/caminhos inseguros. Fontes: documentação da API Fabric Meta e fluxo de instalação Fabric/Quilt.
+
+### Ainda pendentes — não apresentados como instaladores funcionais
+
+- **Forge e NeoForge:** precisam de integração do formato de instalador/processors e do bootstrap ForgeWrapper, com geração e validação das bibliotecas específicas.
+- **Legacy Fabric:** precisa de adapter próprio para a API e as versões históricas.
+- **OptiFine:** precisa do patcher compatível com cada geração e de validação das combinações Forge/Vanilla.
+- **LiteLoader e Rift:** precisam de instaladores legados e suporte às versões realmente publicadas.
+- O suporte a loaders não pode ser considerado concluído apenas por listar versões ou baixar um JAR.
 
 ## Limites que ainda impedem o botão Jogar de funcionar
 
