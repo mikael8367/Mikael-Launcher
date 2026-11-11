@@ -151,4 +151,50 @@ class MinecraftInstallerTest {
             minecraftLibraryArtifact(library)
         }
     }
+
+    @Test
+    fun parsesAndValidatesLegacyVirtualAssetIndex() {
+        val index = JSONObject(
+            """{"virtual":true,"objects":{"sound/test.ogg":{"hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size":42}}}"""
+        )
+        val entries = minecraftAssetEntries(index)
+        assertEquals(1, entries.size)
+        assertEquals("sound/test.ogg", entries.single().name)
+        assertEquals(42L, entries.single().size)
+    }
+
+    @Test
+    fun rejectsAssetIndexWithoutObjects() {
+        assertThrows(IllegalArgumentException::class.java) {
+            minecraftAssetEntries(JSONObject("""{"virtual":true}"""))
+        }
+    }
+
+    @Test
+    fun rejectsMalformedAssetHashInsteadOfSilentlySkippingIt() {
+        val index = JSONObject(
+            """{"objects":{"sound/bad.ogg":{"hash":"not-a-sha1","size":42}}}"""
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            minecraftAssetEntries(index)
+        }
+    }
+
+    @Test
+    fun rejectsAssetPathTraversal() {
+        val index = JSONObject(
+            """{"objects":{"../../outside":{"hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size":42}}}"""
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            minecraftAssetEntries(index)
+        }
+    }
+
+    @Test
+    fun acceptsZeroByteAssetSizeAsDeclaredMetadata() {
+        val index = JSONObject(
+            """{"objects":{"empty.dat":{"hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size":0}}}"""
+        )
+        assertEquals(0L, minecraftAssetEntries(index).single().size)
+    }
 }
