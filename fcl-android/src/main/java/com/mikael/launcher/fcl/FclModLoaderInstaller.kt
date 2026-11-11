@@ -16,7 +16,8 @@ import kotlin.coroutines.resumeWithException
 
 enum class FclModLoader(val patchId: String, val componentType: GameComponentType) {
     FORGE("forge", GameComponentType.FORGE),
-    NEOFORGE("neoforge", GameComponentType.NEO_FORGE)
+    NEOFORGE("neoforge", GameComponentType.NEO_FORGE),
+    OPTIFINE("optifine", GameComponentType.OPTIFINE)
 }
 
 data class FclModLoaderRelease(
@@ -33,8 +34,8 @@ data class FclModLoaderInstallResult(
 
 /**
  * Uses FCL's own component metadata, dependency graph and installer processors.
- * Forge/NeoForge installers are executed by FCL's isolated :jvm process and
- * the resulting profile is saved through FCL's game repository.
+ * Forge/NeoForge use FCL's processors; OptiFine uses FCL's dedicated patcher
+ * and isolated JVM processor runner. Resulting profiles are saved by FCL.
  */
 object FclModLoaderInstaller {
     suspend fun availableVersions(
