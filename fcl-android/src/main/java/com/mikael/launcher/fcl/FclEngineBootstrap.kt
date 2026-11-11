@@ -55,6 +55,27 @@ object FclEngineBootstrap {
 
     fun status(): FclBootstrapStatus = currentStatus
 
+    /**
+     * Applies a changed storage selection without restarting the process-wide FCL services.
+     * The selected profile repository is switched to the same real File path used by installers.
+     */
+    suspend fun updateGameDirectory(context: Context): Boolean = mutex.withLock {
+        if (!currentStatus.initialized) return@withLock false
+        withContext(Dispatchers.IO) {
+            val target = FclGameDirectoryResolver.resolve(context.applicationContext).canonicalFile
+            if (!target.exists() && !target.mkdirs()) {
+                throw IllegalStateException("Não foi possível criar a nova pasta do Minecraft.")
+            }
+            FCLPath.PRIVATE_COMMON_DIR = target.absolutePath
+            val profile = Profiles.getSelectedProfile()
+            if (runCatching { profile.gameDir.canonicalFile != target }.getOrDefault(true)) {
+                profile.gameDir = target
+                Profiles.setSelectedProfile(profile)
+            }
+            true
+        }
+    }
+
     suspend fun initialize(context: Context): FclBootstrapStatus = mutex.withLock {
         if (currentStatus.initialized) return@withLock currentStatus
 
