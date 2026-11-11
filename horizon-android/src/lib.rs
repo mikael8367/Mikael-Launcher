@@ -110,7 +110,8 @@ pub extern "system" fn Java_com_mikael_launcher_engine_horizon_HorizonNativeBrid
 
 #[cfg(target_os = "android")]
 mod android_surface {
-    use std::sync::Arc;
+    use super::{GPU_BACKEND, GPU_VALIDATED};
+    use std::sync::{Arc, Mutex, atomic::Ordering};
     use std::time::{Duration, Instant};
     use winit::{
         application::ApplicationHandler,
