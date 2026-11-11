@@ -85,6 +85,10 @@ import com.mikael.launcher.ui.theme.TextSecondary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import com.mikael.launcher.fcl.FclGameLaunchCoordinator
+import com.mikael.launcher.engine.java.JavaEngineAvailability
+import com.mikael.launcher.engine.EngineAvailability
 
 /**
  * Sessão de instalação com escopo de processo. A instalação do Minecraft pode
@@ -156,71 +160,163 @@ fun PlaceholderScreen(section: LauncherSection) {
 
 @Composable
 private fun PlayScreen() {
+    val context = LocalContext.current
+    val preferences = remember {
+        context.getSharedPreferences("mikael_launcher_preferences", Context.MODE_PRIVATE)
+    }
+    val scope = rememberCoroutineScope()
+
     var engine by rememberSaveable { mutableStateOf("Minecraft Java") }
-    var profile by rememberSaveable { mutableStateOf("Vanilla 1.20.1") }
-    var showInfo by rememberSaveable { mutableStateOf(false) }
+    var installedProfiles by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedProfile by rememberSaveable { mutableStateOf("") }
+    var offlineUsername by rememberSaveable {
+        mutableStateOf(preferences.getString("launcher_offline_username", "Player").orEmpty())
+    }
+    var engineReady by remember { mutableStateOf(false) }
+    var engineStatus by remember { mutableStateOf("Verificando o motor Minecraft Java…") }
+    var isLaunching by remember { mutableStateOf(false) }
+    var launchError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        try {
+            installedProfiles = FclGameLaunchCoordinator.installedVersionIds(context.applicationContext)
+            val savedSelection = preferences.getString("launcher_selected_version_profile", "").orEmpty()
+            selectedProfile = savedSelection.takeIf { it in installedProfiles }
+                ?: installedProfiles.firstOrNull().orEmpty()
+            val availability = JavaEngineAvailability().availability()
+            when (availability) {
+                is EngineAvailability.Ready -> {
+                    engineReady = true
+                    engineStatus = "Motor FCL preparado • ${installedProfiles.size} perfil(is) instalado(s)."
+                }
+                is EngineAvailability.Unavailable -> {
+                    engineReady = false
+                    engineStatus = availability.message
+                }
+                EngineAvailability.Initializing -> {
+                    engineReady = false
+                    engineStatus = "O motor FCL ainda está inicializando."
+                }
+            }
+        } catch (failure: Exception) {
+            engineReady = false
+            engineStatus = failure.message ?: "Não foi possível consultar o motor FCL."
+        }
+    }
 
     ScreenColumn(
         eyebrow = "CENTRAL DE JOGO",
         title = "Jogar",
-        subtitle = "Escolha o motor e o perfil que deseja preparar."
+        subtitle = "Selecione um perfil instalado e inicie o Minecraft Java."
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ChoiceCard(
                 modifier = Modifier.weight(1f),
                 title = "Minecraft Java",
-                description = "Forge, Fabric, OptiFine e versões tradicionais.",
+                description = "Motor FCL • Vanilla, Forge, Fabric e OptiFine conforme instalados.",
                 accent = PrimaryGreen,
                 selected = engine == "Minecraft Java",
-                onClick = {
-                    engine = "Minecraft Java"
-                    profile = "Vanilla 1.20.1"
-                }
+                onClick = { engine = "Minecraft Java"; launchError = null }
             )
             ChoiceCard(
                 modifier = Modifier.weight(1f),
                 title = "Horizon Rust",
-                description = "Motor independente. Requer compatibilidade Vulkan.",
+                description = "Motor separado; ainda não inicia um cliente Minecraft jogável.",
                 accent = AccentPurple,
                 selected = engine == "Horizon Rust",
-                onClick = {
-                    engine = "Horizon Rust"
-                    profile = "Horizon"
-                }
+                onClick = { engine = "Horizon Rust"; launchError = null }
             )
         }
-        SectionLabel("PERFIL SELECIONADO")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Vanilla 1.20.1", "Forge 1.12.2", "Fabric 1.20.1").forEach { option ->
-                FilterChip(
-                    selected = profile == option && engine == "Minecraft Java",
-                    onClick = {
-                        engine = "Minecraft Java"
-                        profile = option
-                    },
-                    label = { Text(option, fontSize = 11.sp) }
+
+        if (engine == "Minecraft Java") {
+            SectionLabel("VERSÃO INSTALADA")
+            if (installedProfiles.isEmpty()) {
+                Text(
+                    "Nenhuma versão foi encontrada. Instale uma versão na aba Versões primeiro.",
+                    color = TextSecondary,
+                    fontSize = 11.sp
+                )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    installedProfiles.forEach { versionId ->
+                        FilterChip(
+                            selected = selectedProfile == versionId,
+                            onClick = {
+                                selectedProfile = versionId
+                                preferences.edit().putString("launcher_selected_version_profile", versionId).apply()
+                                launchError = null
+                            },
+                            label = { Text(versionId, fontSize = 10.sp) }
+                        )
+                    }
+                }
+            }
+
+            SectionLabel("CONTA OFFLINE")
+            androidx.compose.material3.OutlinedTextField(
+                value = offlineUsername,
+                onValueChange = { offlineUsername = it.take(32) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Nome do jogador") },
+                supportingText = { Text("Use de 1 a 16 caracteres: A–Z, a–z, 0–9 ou _") }
+            )
+
+            InfoCard(
+                title = "Estado do motor Java",
+                body = engineStatus,
+                accent = if (engineReady) PrimaryGreen else AccentYellow
+            )
+
+            if (launchError != null) {
+                Text(
+                    "Falha ao iniciar: $launchError",
+                    color = AccentYellow,
+                    fontSize = 11.sp
                 )
             }
+
+            Button(
+                enabled = !isLaunching && engineReady && selectedProfile.isNotBlank(),
+                onClick = {
+                    launchError = null
+                    isLaunching = true
+                    preferences.edit().putString("launcher_offline_username", offlineUsername.trim()).apply()
+                    scope.launch {
+                        try {
+                            FclGameLaunchCoordinator.launch(
+                                context = context,
+                                versionId = selectedProfile,
+                                username = offlineUsername.trim()
+                            )
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (failure: Exception) {
+                            launchError = failure.message ?: "Erro desconhecido ao iniciar o Minecraft."
+                        } finally {
+                            isLaunching = false
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PrimaryGreen,
+                    contentColor = Color(0xFF062116)
+                )
+            ) {
+                Icon(Icons.Rounded.Gamepad, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (isLaunching) "Preparando Minecraft…" else "Iniciar Minecraft")
+            }
+        } else {
+            InfoCard(
+                title = "Horizon Rust",
+                body = "O Horizon continua isolado do motor Java. A integração atual ainda não contém um cliente Minecraft jogável para iniciar.",
+                accent = AccentPurple
+            )
         }
-        InfoCard(
-            title = "Resumo da seleção",
-            body = "Motor: $engine\nPerfil: $profile\nEstado: aguardando integração do motor.",
-            accent = AccentBlue
-        )
-        Button(
-            onClick = { showInfo = true },
-            colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen, contentColor = Color(0xFF062116))
-        ) {
-            Icon(Icons.Rounded.Gamepad, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Preparar para jogar")
-        }
-    }
-    if (showInfo) {
-        InfoDialog(
-            title = "Motor ainda não conectado",
-            message = "A seleção de motor e perfil já funciona. A inicialização real será ligada quando os módulos Java e Horizon forem implementados."
-        ) { showInfo = false }
     }
 }
 
