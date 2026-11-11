@@ -92,7 +92,7 @@ object FclEngineBootstrap {
                 // FCLPath contains static paths used by ConfigHolder and other FCL
                 // classes. It must be initialized before those classes are touched.
                 FCLPath.loadPaths(appContext)
-                val defaultPrivateGameDirectory = File(FCLPath.PRIVATE_COMMON_DIR).canonicalFile
+                val appPrivateGameDirectory = File(appContext.filesDir, "minecraft").canonicalFile
 
                 // The selected SAF directory is resolved to a real local filesystem
                 // path because FCL's game repository and Minecraft process use java.io.File.
@@ -102,10 +102,8 @@ object FclEngineBootstrap {
                 }
                 FCLPath.PRIVATE_COMMON_DIR = selectedGameDirectory.absolutePath
 
-                // The pinned FCL upstream defaults several directories to /sdcard/FCL.
-                // On Android 11+ this requires broad all-files access, which this
-                // launcher deliberately does not request. Redirect these paths to
-                // app-owned storage before any FCL service writes to them.
+                // Keep FCL logs, controllers and runtime support files app-private.
+                // Only the game directory follows the user's selected local folder.
                 val fclPrivateRoot = File(appContext.filesDir, "fcl").apply {
                     if (!exists() && !mkdirs()) {
                         throw IllegalStateException("Não foi possível criar o diretório privado do FCL.")
@@ -180,7 +178,7 @@ object FclEngineBootstrap {
                 val privateGameDirectory = selectedProfile?.let { profile ->
                     runCatching {
                         profile.gameDir.canonicalFile ==
-                            defaultPrivateGameDirectory
+                            appPrivateGameDirectory
                     }.getOrDefault(false)
                 } ?: false
 
