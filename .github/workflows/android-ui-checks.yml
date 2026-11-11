@@ -36,6 +36,8 @@ jobs:
           gradle-version: "8.14.4"
       - name: Verify filtered ARM64 Java runtime assets
         run: gradle :fcl-android:verifyFclArm64JreAssets
+      - name: Inspect all four ARM64 runtime archives
+        run: python3 scripts/verify-fcl-arm64-runtime-archives.py fcl-android/build/generated/fclArm64JreAssets
       - name: Compile FCL Android engine sources
         run: gradle :fcl-android:compileDebugKotlin
       - name: Compile Android Kotlin sources
