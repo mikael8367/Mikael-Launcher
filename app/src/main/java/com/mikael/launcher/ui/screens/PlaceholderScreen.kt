@@ -280,6 +280,7 @@ private fun VersionsScreen() {
         val fclBackend = when (selectedLoader) {
             "Forge" -> com.mikael.launcher.fcl.FclModLoader.FORGE
             "NeoForge" -> com.mikael.launcher.fcl.FclModLoader.NEOFORGE
+            "OptiFine" -> com.mikael.launcher.fcl.FclModLoader.OPTIFINE
             else -> null
         }
         if (fabricBackend == null && fclBackend == null) {
@@ -330,11 +331,11 @@ private fun VersionsScreen() {
         try {
             val entry = catalog.firstOrNull { it.id == selectedVersion }
                 ?: error("A versão selecionada não está disponível no catálogo oficial.")
-            if (selectedLoader == "Forge" || selectedLoader == "NeoForge") {
-                val backend = if (selectedLoader == "Forge") {
-                    com.mikael.launcher.fcl.FclModLoader.FORGE
-                } else {
-                    com.mikael.launcher.fcl.FclModLoader.NEOFORGE
+            if (selectedLoader in setOf("Forge", "NeoForge", "OptiFine")) {
+                val backend = when (selectedLoader) {
+                    "Forge" -> com.mikael.launcher.fcl.FclModLoader.FORGE
+                    "NeoForge" -> com.mikael.launcher.fcl.FclModLoader.NEOFORGE
+                    else -> com.mikael.launcher.fcl.FclModLoader.OPTIFINE
                 }
                 val loaderVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
                     ?: error("Não há uma versão compatível de $selectedLoader selecionada.")
@@ -502,13 +503,14 @@ private fun VersionsScreen() {
             Text(
                 when (selectedLoader) {
                     "Vanilla" -> "Vanilla: instalação oficial do cliente e dependências."
+                    "OptiFine" -> "OptiFine: patcher gráfico instalado pelo mecanismo FCL. Combinações com Forge ainda não são oferecidas nesta tela."
                     "Fabric", "Quilt", "Forge", "NeoForge" -> loaderCatalogMessage
                     else -> "$selectedLoader: instalador específico ainda não integrado. Não será exibido como instalável."
                 },
-                color = if (selectedLoader in setOf("Vanilla", "Fabric", "Quilt", "Forge", "NeoForge")) TextSecondary else AccentYellow,
+                color = if (selectedLoader in setOf("Vanilla", "Fabric", "Quilt", "Forge", "NeoForge", "OptiFine")) TextSecondary else AccentYellow,
                 fontSize = 10.sp
             )
-            if (selectedLoader == "Fabric" || selectedLoader == "Quilt" || selectedLoader == "Forge" || selectedLoader == "NeoForge") {
+            if (selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine")) {
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -526,13 +528,13 @@ private fun VersionsScreen() {
                 text = when {
                     installRequested -> "Instalando..."
                     selectedLoader == "Vanilla" -> "⬇  Baixar e instalar Vanilla"
-                    selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge") -> "⬇  Instalar $selectedLoader"
+                    selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine") -> "⬇  Instalar $selectedLoader"
                     else -> "$selectedLoader indisponível"
                 },
                 onClick = {
                     if (!installRequested) {
                         if (selectedLoader == "Vanilla" ||
-                            selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge") && selectedLoaderVersion.isNotBlank()
+                            selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine") && selectedLoaderVersion.isNotBlank()
                         ) {
                             installRequested = true
                         } else {
