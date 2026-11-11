@@ -152,7 +152,7 @@ fun HorizonRustScreen() {
                         shape = RoundedCornerShape(30.dp)
                     ) {
                         Text(
-                            "ANDROID EXPERIMENTAL",
+                            "ANDROID EM AVALIAÇÃO",
                             color = AccentPurple,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
@@ -166,7 +166,7 @@ fun HorizonRustScreen() {
                     )
                 }
                 AnimatedLauncherButton(
-                    text = "Verificar instalação",
+                    text = "Consultar disponibilidade",
                     onClick = { showInstallInfo = true },
                     modifier = Modifier.fillMaxWidth()
                 )
