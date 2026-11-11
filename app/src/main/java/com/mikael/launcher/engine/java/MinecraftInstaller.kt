@@ -245,16 +245,8 @@ class MinecraftInstaller(
         if (task.target.isFile && isValid(task.target, task.sha1, task.size)) return
         val part = File(task.target.parentFile, task.target.name + ".part")
         if (part.exists()) part.delete()
-        require(task.url.startsWith("https://")) { "Download HTTP inseguro bloqueado: ${task.label}" }
-        val connection = URL(task.url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 20000
-        connection.readTimeout = 45000
-        connection.instanceFollowRedirects = true
-        connection.setRequestProperty("User-Agent", "MikaelLauncher/0.1.0 (Minecraft asset installer)")
+        val connection = openHttpsConnection(task.url, "MikaelLauncher/0.1.0 (Minecraft asset installer)")
         try {
-            val status = connection.responseCode
-            if (connection.url.protocol != "https") error("Redirecionamento para HTTP inseguro bloqueado.")
-            if (status !in 200..299) error("Download falhou ($status): ${task.label}")
             connection.inputStream.use { input ->
                 part.outputStream().buffered().use { output ->
                     val buffer = ByteArray(64 * 1024)
@@ -299,19 +291,39 @@ class MinecraftInstaller(
     }
 
     private fun readUrl(url: String): ByteArray {
-        require(url.startsWith("https://")) { "Download HTTP inseguro bloqueado." }
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 20000
-        connection.readTimeout = 45000
-        connection.setRequestProperty("User-Agent", "MikaelLauncher/0.1.0")
+        val connection = openHttpsConnection(url, "MikaelLauncher/0.1.0")
         return try {
-            val status = connection.responseCode
-            if (connection.url.protocol != "https") error("Redirecionamento para HTTP inseguro bloqueado.")
-            if (status !in 200..299) error("Falha HTTP $status ao consultar metadados.")
             connection.inputStream.use { it.readBytes() }
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun openHttpsConnection(initialUrl: String, userAgent: String): HttpURLConnection {
+        require(initialUrl.startsWith("https://")) { "Download HTTP inseguro bloqueado." }
+        var currentUrl = URL(initialUrl)
+        repeat(6) {
+            require(currentUrl.protocol == "https") { "Redirecionamento para HTTP inseguro bloqueado." }
+            val connection = currentUrl.openConnection() as HttpURLConnection
+            connection.connectTimeout = 20000
+            connection.readTimeout = 45000
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("User-Agent", userAgent)
+            val status = connection.responseCode
+            if (status in 300..399) {
+                val location = connection.getHeaderField("Location")
+                connection.disconnect()
+                require(!location.isNullOrBlank()) { "Redirecionamento sem destino." }
+                currentUrl = URL(currentUrl, location)
+            } else {
+                if (status !in 200..299) {
+                    connection.disconnect()
+                    error("Falha HTTP $status ao baixar conteúdo oficial.")
+                }
+                return connection
+            }
+        }
+        error("O servidor excedeu o limite de redirecionamentos.")
     }
 
     private fun writeAtomically(target: File, bytes: ByteArray) {
