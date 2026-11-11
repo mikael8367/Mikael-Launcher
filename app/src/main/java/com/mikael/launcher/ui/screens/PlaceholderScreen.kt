@@ -233,7 +233,6 @@ private fun VersionsScreen() {
     var installRequested by rememberSaveable { mutableStateOf(false) }
     var installProgress by remember { mutableStateOf<MinecraftInstallProgress?>(null) }
     var installError by remember { mutableStateOf<String?>(null) }
-    var installDone by rememberSaveable { mutableStateOf(false) }
     var installedVersion by rememberSaveable { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var retryCount by remember { mutableIntStateOf(0) }
@@ -276,7 +275,6 @@ private fun VersionsScreen() {
     LaunchedEffect(installRequested) {
         if (!installRequested) return@LaunchedEffect
         installError = null
-        installDone = false
         installProgress = null
         try {
             val entry = catalog.firstOrNull { it.id == selectedVersion }
@@ -290,7 +288,6 @@ private fun VersionsScreen() {
             }
             saveProfiles(profiles + result.versionId, result.versionId)
             installedVersion = result.versionId
-            installDone = true
             showInfo = true
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -407,7 +404,6 @@ private fun VersionsScreen() {
                 text = if (installRequested) "Instalando..." else "⬇  Baixar e instalar versão",
                 onClick = {
                     if (!installRequested) {
-                        installDone = false
                         installRequested = true
                     }
                 },
