@@ -28,3 +28,32 @@ jobs:
         run: gradle :app:compileDebugKotlin
       - name: Run unit tests
         run: gradle :app:testDebugUnitTest
+
+  horizon-android-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+          components: rustfmt, clippy
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android NDK
+        run: sdkmanager "ndk;27.2.12479018"
+      - name: Configure Android NDK
+        run: echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+      - name: Check Rust formatting
+        working-directory: horizon-android
+        run: cargo fmt --all -- --check
+      - name: Run Rust unit tests
+        working-directory: horizon-android
+        run: cargo test --locked
+      - name: Build Android ARM64 JNI library
+        run: bash scripts/build-horizon-android.sh
+      - name: Verify native library output
+        run: test -s app/src/main/jniLibs/arm64-v8a/libhorizon_android.so
