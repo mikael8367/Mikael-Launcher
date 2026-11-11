@@ -77,6 +77,23 @@ object FclEngineBootstrap {
         }
     }
 
+    suspend fun installedVersionIds(context: Context): List<String> {
+        if (!currentStatus.initialized) initialize(context.applicationContext)
+        return mutex.withLock {
+            check(currentStatus.initialized) { currentStatus.message }
+            withContext(Dispatchers.IO) {
+                val target = FclGameDirectoryResolver.resolve(context.applicationContext).canonicalFile
+                val profile = Profiles.getSelectedProfile()
+                if (profile.gameDir.canonicalFile != target) {
+                    profile.gameDir = target
+                    Profiles.setSelectedProfile(profile)
+                }
+                profile.repository.refreshVersions()
+                profile.repository.versions.map { it.id }.distinct().sorted()
+            }
+        }
+    }
+
     suspend fun refreshAndSelectGameVersion(context: Context, versionId: String): Boolean {
         if (!currentStatus.initialized) {
             initialize(context.applicationContext)
