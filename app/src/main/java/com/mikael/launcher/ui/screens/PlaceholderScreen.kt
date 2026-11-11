@@ -455,20 +455,26 @@ private fun VersionsScreen() {
         val installCatalog = catalog.toList()
         val installedProfiles = profiles.toList()
         val applicationContext = context.applicationContext
-        com.mikael.launcher.engine.java.MinecraftInstallForegroundService.start(
-            context = applicationContext,
-            minecraftVersion = installVersion,
-            metadataUrl = installCatalog.firstOrNull { it.id == installVersion }?.url
-                ?: run {
-                    MinecraftInstallSession.reportError("A versão selecionada não está disponível no catálogo oficial.")
-                    return
-                },
-            metadataSha1 = installCatalog.first { it.id == installVersion }.sha1,
-            loader = installLoader,
-            loaderVersion = installLoaderVersion,
-            forgeVersion = installForgeVersion,
-            installedProfiles = installedProfiles
-        )
+        try {
+            com.mikael.launcher.engine.java.MinecraftInstallForegroundService.start(
+                context = applicationContext,
+                minecraftVersion = installVersion,
+                metadataUrl = installCatalog.firstOrNull { it.id == installVersion }?.url
+                    ?: run {
+                        MinecraftInstallSession.reportError("A versão selecionada não está disponível no catálogo oficial.")
+                        return
+                    },
+                metadataSha1 = installCatalog.first { it.id == installVersion }.sha1,
+                loader = installLoader,
+                loaderVersion = installLoaderVersion,
+                forgeVersion = installForgeVersion,
+                installedProfiles = installedProfiles
+            )
+        } catch (failure: Exception) {
+            MinecraftInstallSession.reportError(
+                failure.message ?: "Não foi possível iniciar o serviço de instalação em segundo plano."
+            )
+        }
     }
 
     val filteredVersions = remember(catalog, selectedTab, searchText) {
