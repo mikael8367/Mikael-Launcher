@@ -34,12 +34,21 @@ A pesquisa usa o ID da versão. O manifesto é a fonte da URL e do SHA-1 do JSON
 
 Downloads usam HTTPS; redirecionamento para HTTP é rejeitado. Os caminhos de destino são normalizados e impedidos de escapar da pasta do jogo.
 
+## Mod loaders exibidos na seleção de versão
+
+A tela de versões agora permite escolher e memorizar Vanilla, Forge, NeoForge, Fabric, Legacy Fabric, Quilt, OptiFine, LiteLoader e Rift. Essa seleção é apenas a escolha do tipo de instalação: não cria um perfil loader nem baixa seus arquivos ainda. Cada loader precisa de um backend próprio para consultar versões compatíveis, validar metadados, resolver bibliotecas e aplicar seu formato de instalação.
+
+- Fabric e Quilt usam perfis JSON que precisam ser mesclados ao metadata Mojang.
+- Forge e NeoForge exigem tratamento de instalador/processors e suas bibliotecas específicas.
+- OptiFine e os loaders históricos exigem fluxos e compatibilidades por versão.
+- O botão de instalação permanece limitado ao Vanilla até esses fluxos serem implementados e testados; selecionar outro loader mostra explicitamente que o instalador está pendente.
+
 ## Limites que ainda impedem o botão Jogar de funcionar
 
 - Os classificadores `natives-linux`, `natives-windows` e `natives-osx` são ignorados no download Android; o runtime FCL precisa fornecer os natives Android ARM64.
 - A camada de runtime Java ARM64 do FCL ainda não foi conectada.
 - A adaptação FCL para construir classpath, extrair natives corretos, preparar argumentos JVM, abrir a superfície SDL/renderer e iniciar o processo ainda não foi integrada.
-- Forge, Fabric e OptiFine exigem instaladores/patchers próprios e validação de dependências; selecionar um nome no perfil não equivale a instalar esses loaders.
+- Forge, NeoForge, Fabric, Legacy Fabric, Quilt, OptiFine, LiteLoader e Rift exigem backends/patchers próprios e validação de dependências; os nomes já podem ser selecionados na interface, mas ainda não são instaláveis.
 - Metadados históricos sem `assetIndex` ainda precisam de tratamento específico por geração; o instalador não inventa um índice ausente. Os layouts `virtual` e `map_to_resources` são materializados quando as flags aparecem no índice.
 
 Portanto, esta etapa instala o conjunto de arquivos oficiais descritos pelo manifesto para versões suportadas, mas **não declara o jogo pronto para execução**. A disponibilidade do motor permanece bloqueada até concluir e testar o adaptador FCL em Android ARM64.
