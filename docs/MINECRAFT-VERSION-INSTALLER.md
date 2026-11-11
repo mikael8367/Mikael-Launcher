@@ -56,6 +56,7 @@ A tela de versões oferece Vanilla, Forge, NeoForge, Fabric, Legacy Fabric, Quil
 - **Forge:** consulta a lista de componentes Forge do FCL e usa `GameBuilder` + `ForgeInstallTask` do FCL. O FCL baixa o installer, identifica o formato antigo/novo, executa os passos necessários e salva o perfil no repositório.
 - **NeoForge:** consulta a lista oficial de versões NeoForge do FCL e usa `NeoForgeInstallTask`, incluindo a cadeia de processors e o runner isolado `:jvm` do FCL.
 - **OptiFine:** consulta o catálogo de componentes OptiFine do FCL e usa o `GameBuilder` com `OptiFineRemoteVersion`/`OptiFineInstallTask`. O patcher do FCL valida a versão-base, aplica o patch e usa o `InstallerProcessRunner` com tentativas de Java 8, 17, 11 e 21 quando necessário. O perfil só é cadastrado após o builder terminar e o repositório encontrar o resultado.
+- **Forge + OptiFine:** disponível como perfil combinado. A tela consulta os catálogos dos dois componentes, exige que ambos tenham uma versão publicada para a versão-base selecionada e permite escolher as versões separadamente. A instalação é sequencial: cria o perfil-base, aplica Forge, aplica OptiFine sobre a versão já modificada pelo Forge e só então salva/seleciona o perfil final. Isso respeita a exigência do `OptiFineInstallTask` de encontrar um wrapper Forge compatível; não usa a coleção não ordenada de componentes do `GameBuilder` para definir a ordem.
 - Forge, NeoForge e OptiFine constroem o perfil pelo pipeline do FCL; não são tratados como simples download de JAR.
 
 Fabric/Quilt preservam as bibliotecas do Minecraft, adicionam bibliotecas do loader, combinam argumentos de inicialização e rejeitam identificadores/caminhos inseguros. Forge/NeoForge/OptiFine delegam resolução de versões, dependências e patching ao backend FCL integrado.
@@ -64,7 +65,7 @@ Fabric/Quilt preservam as bibliotecas do Minecraft, adicionam bibliotecas do loa
 
 - **Legacy Fabric:** precisa de adapter próprio para a API e as versões históricas.
 - **LiteLoader e Rift:** precisam de instaladores legados e suporte às versões realmente publicadas.
-- **Combinação Forge + OptiFine:** a tela atual instala OptiFine como perfil separado; não oferece combinação de componentes. A compatibilidade combinada precisa ser implementada e testada antes de ser anunciada.
+- A combinação Forge + OptiFine usa a verificação interna do patcher FCL; versões específicas ainda precisam ser validadas em dispositivo Android ARM64 e podem ser recusadas pelo instalador se o wrapper Forge não for compatível.
 - O suporte a componentes não pode ser considerado concluído apenas por listar versões ou baixar um JAR.
 
 ## Limites que ainda impedem o botão Jogar de funcionar
