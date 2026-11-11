@@ -72,7 +72,7 @@ internal fun GameStorageLocationPanel() {
         }
         val installed = tree.findFile("versions")?.listFiles()?.filter { it.isDirectory }?.mapNotNull { it.name }.orEmpty()
         entries = entries + if (installed.isEmpty()) listOf("Nenhuma versão encontrada") else installed.map { "Versão: $it" }
-        status = "Pasta selecionada e permissão de leitura e gravação persistida."
+        status = "Pasta local selecionada. Para instaladores e FCL usarem esse caminho, conceda também o acesso amplo aos arquivos."
     }
 
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -133,7 +133,7 @@ internal fun GameStorageLocationPanel() {
         }
         Text("Conteúdo reconhecido", color = TextPrimary, fontSize = 11.sp)
         entries.forEach { Text("• $it", color = TextSecondary, fontSize = 10.sp) }
-        Text("A seleção SAF já guarda a autorização específica da pasta. O acesso amplo é uma permissão separada; a migração dos instaladores e do FCL para usar a pasta externa ainda precisa ser concluída.", color = TextSecondary, fontSize = 10.sp)
+        Text("A pasta selecionada agora é usada pelo instalador Vanilla, Fabric/Quilt e pelo diretório ativo do FCL. No Android 11+, conceda também Acesso a todos os arquivos. Pastas de nuvem e diretórios protegidos do Android não servem como diretório de jogo.", color = TextSecondary, fontSize = 10.sp)
     }
 }
 
