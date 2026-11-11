@@ -2,13 +2,11 @@ package com.mikael.launcher.fcl
 
 import android.content.Context
 import com.tungsten.fcl.setting.Profiles
-import com.tungsten.fclcore.download.ComponentRemoteVersion
 import com.tungsten.fclcore.game.GameComponentType
 import com.tungsten.fclcore.task.Task
 import com.tungsten.fclcore.task.TaskExecutor
 import com.tungsten.fclcore.task.TaskListener
 import java.io.File
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -44,7 +42,7 @@ object FclModLoaderInstaller {
         loader: FclModLoader
     ): List<FclModLoaderRelease> = withContext(Dispatchers.IO) {
         requireSafeMinecraftVersion(minecraftVersion)
-        ensureFclReady()
+        ensureFclReady(context)
         val profile = Profiles.getSelectedProfile()
         val dependency = profile.getDependency()
         val list = dependency.getVersionList(loader.componentType)
@@ -101,9 +99,12 @@ object FclModLoaderInstaller {
         FclModLoaderInstallResult(profileId, minecraftVersion, loader, loaderVersion)
     }
 
-    private fun ensureFclReady() {
+    private suspend fun ensureFclReady(context: Context) {
+        if (!FclEngineBootstrap.status().initialized) {
+            FclEngineBootstrap.initialize(context.applicationContext)
+        }
         check(FclEngineBootstrap.status().initialized) {
-            "O mecanismo FCL ainda não foi inicializado. Abra a tela inicial e tente novamente."
+            FclEngineBootstrap.status().message.ifBlank { "Não foi possível inicializar o mecanismo FCL." }
         }
     }
 
