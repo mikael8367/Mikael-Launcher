@@ -30,7 +30,7 @@ import androidx.core.content.ContextCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
 import com.mikael.launcher.fcl.FclEngineBootstrap
 import com.mikael.launcher.ui.theme.PrimaryGreen
@@ -40,7 +40,7 @@ import com.mikael.launcher.ui.theme.TextSecondary
 @Composable
 internal fun GameStorageLocationPanel() {
     val context = LocalContext.current
-    val lifecycleOwner = context as? LifecycleOwner
+    val lifecycleOwner = LocalLifecycleOwner.current
     val prefs = remember { context.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
     var selectedUri by remember { mutableStateOf(prefs.getString(PREF_GAME_TREE_URI, null)) }
