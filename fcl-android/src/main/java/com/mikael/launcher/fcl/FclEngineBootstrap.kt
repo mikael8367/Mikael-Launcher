@@ -72,6 +72,7 @@ object FclEngineBootstrap {
                 profile.gameDir = target
                 Profiles.setSelectedProfile(profile)
             }
+            profile.repository.refreshVersions()
             true
         }
     }
