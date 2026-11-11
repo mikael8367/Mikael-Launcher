@@ -325,34 +325,50 @@ private fun VersionsScreen() {
     }
 
     LaunchedEffect(selectedVersion, selectedLoader) {
-        val fabricBackend = when (selectedLoader) {
+        // Capture the request key once. A cancelled request must never publish
+        // results or errors belonging to a previous loader/version selection.
+        val requestedVersion = selectedVersion
+        val requestedLoader = selectedLoader
+        val fabricBackend = when (requestedLoader) {
             "Fabric" -> com.mikael.launcher.engine.java.SupportedProfileLoader.FABRIC
             "Quilt" -> com.mikael.launcher.engine.java.SupportedProfileLoader.QUILT
             else -> null
         }
-        val fclBackend = when (selectedLoader) {
+        val fclBackend = when (requestedLoader) {
             "Forge" -> com.mikael.launcher.fcl.FclModLoader.FORGE
             "NeoForge" -> com.mikael.launcher.fcl.FclModLoader.NEOFORGE
             "OptiFine" -> com.mikael.launcher.fcl.FclModLoader.OPTIFINE
             "Forge + OptiFine" -> null
             else -> null
         }
-        if (selectedLoader == "Forge + OptiFine") {
+
+        // Clear old choices immediately so stale releases cannot be installed
+        // while the catalog for the new selection is still loading.
+        forgeVersions = emptyList()
+        loaderVersions = emptyList()
+        selectedForgeVersion = ""
+        selectedLoaderVersion = ""
+
+        if (requestedLoader == "Forge + OptiFine") {
             loaderCatalogMessage = "Consultando versões compatíveis de Forge e OptiFine..."
             try {
-                val forge = com.mikael.launcher.fcl.FclModLoaderInstaller.availableVersions(context, selectedVersion, com.mikael.launcher.fcl.FclModLoader.FORGE)
-                    .map { com.mikael.launcher.engine.java.LoaderRelease(it.version, it.stable) }
-                val optifine = com.mikael.launcher.fcl.FclModLoaderInstaller.availableVersions(context, selectedVersion, com.mikael.launcher.fcl.FclModLoader.OPTIFINE)
-                    .map { com.mikael.launcher.engine.java.LoaderRelease(it.version, it.stable) }
+                val forge = com.mikael.launcher.fcl.FclModLoaderInstaller.availableVersions(
+                    context, requestedVersion, com.mikael.launcher.fcl.FclModLoader.FORGE
+                ).map { com.mikael.launcher.engine.java.LoaderRelease(it.version, it.stable) }
+                val optifine = com.mikael.launcher.fcl.FclModLoaderInstaller.availableVersions(
+                    context, requestedVersion, com.mikael.launcher.fcl.FclModLoader.OPTIFINE
+                ).map { com.mikael.launcher.engine.java.LoaderRelease(it.version, it.stable) }
                 forgeVersions = forge
                 loaderVersions = optifine
                 selectedForgeVersion = forge.firstOrNull()?.version.orEmpty()
                 selectedLoaderVersion = optifine.firstOrNull()?.version.orEmpty()
                 loaderCatalogMessage = if (forge.isEmpty() || optifine.isEmpty()) {
-                    "Não há versões publicadas dos dois componentes para Minecraft $selectedVersion."
+                    "Não há versões publicadas dos dois componentes para Minecraft $requestedVersion."
                 } else {
                     "Selecione uma versão de Forge e uma versão de OptiFine. O patch será aplicado nessa ordem."
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 forgeVersions = emptyList()
                 loaderVersions = emptyList()
@@ -361,33 +377,33 @@ private fun VersionsScreen() {
                 loaderCatalogMessage = error.message ?: "Falha ao consultar os catálogos Forge/OptiFine."
             }
         } else if (fabricBackend == null && fclBackend == null) {
-            loaderVersions = emptyList()
-            selectedLoaderVersion = ""
-            loaderCatalogMessage = if (selectedLoader == "Vanilla") "" else
-                "$selectedLoader ainda não possui instalador integrado."
+            loaderCatalogMessage = if (requestedLoader == "Vanilla") "" else
+                "$requestedLoader ainda não possui instalador integrado."
         } else {
             loaderCatalogMessage = "Consultando versões compatíveis..."
             try {
                 val releases = if (fclBackend != null) {
                     com.mikael.launcher.fcl.FclModLoaderInstaller.availableVersions(
-                        context, selectedVersion, fclBackend
+                        context, requestedVersion, fclBackend
                     ).map { com.mikael.launcher.engine.java.LoaderRelease(it.version, it.stable) }
                 } else {
                     com.mikael.launcher.engine.java.ModLoaderProfileInstaller(
                         FclGameDirectoryResolver.resolve(context)
-                    ).availableVersions(selectedVersion, requireNotNull(fabricBackend))
+                    ).availableVersions(requestedVersion, requireNotNull(fabricBackend))
                 }
                 loaderVersions = releases
                 selectedLoaderVersion = releases.firstOrNull()?.version.orEmpty()
                 loaderCatalogMessage = if (releases.isEmpty()) {
-                    "Nenhuma versão de $selectedLoader foi publicada para Minecraft $selectedVersion."
+                    "Nenhuma versão de $requestedLoader foi publicada para Minecraft $requestedVersion."
                 } else {
                     "${releases.size} versões compatíveis encontradas."
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 loaderVersions = emptyList()
                 selectedLoaderVersion = ""
-                loaderCatalogMessage = error.message ?: "Falha ao consultar o catálogo de $selectedLoader."
+                loaderCatalogMessage = error.message ?: "Falha ao consultar o catálogo de $requestedLoader."
             }
         }
     }
@@ -410,39 +426,49 @@ private fun VersionsScreen() {
 
     fun startInstall() {
         if (MinecraftInstallSession.inProgress) return
-        val installable = selectedLoader == "Vanilla" ||
-            (selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine") && selectedLoaderVersion.isNotBlank()) ||
-            (selectedLoader == "Forge + OptiFine" && selectedForgeVersion.isNotBlank() && selectedLoaderVersion.isNotBlank())
+
+        // Freeze every user choice before the background task starts. The worker
+        // must not read Compose state again after the UI has moved on.
+        val installVersion = selectedVersion
+        val installLoader = selectedLoader
+        val installLoaderVersion = selectedLoaderVersion
+        val installForgeVersion = selectedForgeVersion
+        val installCatalog = catalog.toList()
+        val installedProfiles = profiles.toList()
+
+        val installable = installLoader == "Vanilla" ||
+            (installLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine") && installLoaderVersion.isNotBlank()) ||
+            (installLoader == "Forge + OptiFine" && installForgeVersion.isNotBlank() && installLoaderVersion.isNotBlank())
         if (!installable) {
-            MinecraftInstallSession.reportError("$selectedLoader não possui um instalador compatível disponível para esta versão.")
+            MinecraftInstallSession.reportError("$installLoader não possui um instalador compatível disponível para esta versão.")
             return
         }
         val applicationContext = context.applicationContext
         MinecraftInstallSession.start {
-            val entry = catalog.firstOrNull { it.id == selectedVersion }
+            val entry = installCatalog.firstOrNull { it.id == installVersion }
                 ?: error("A versão selecionada não está disponível no catálogo oficial.")
-            if (selectedLoader == "Forge + OptiFine") {
-                val forgeVersion = selectedForgeVersion.takeIf { it.isNotBlank() }
+            if (installLoader == "Forge + OptiFine") {
+                val forgeVersion = installForgeVersion.takeIf { it.isNotBlank() }
                     ?: error("Selecione uma versão de Forge compatível.")
-                val optiFineVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
+                val optiFineVersion = installLoaderVersion.takeIf { it.isNotBlank() }
                     ?: error("Selecione uma versão de OptiFine compatível.")
                 val result = com.mikael.launcher.fcl.FclModLoaderInstaller.installForgeOptiFine(
                     applicationContext, entry.id, forgeVersion, optiFineVersion
                 )
-                saveProfiles(profiles + result.profileId, result.profileId)
+                saveProfiles(installedProfiles + result.profileId, result.profileId)
                 result.profileId
-            } else if (selectedLoader in setOf("Forge", "NeoForge", "OptiFine")) {
-                val backend = when (selectedLoader) {
+            } else if (installLoader in setOf("Forge", "NeoForge", "OptiFine")) {
+                val backend = when (installLoader) {
                     "Forge" -> com.mikael.launcher.fcl.FclModLoader.FORGE
                     "NeoForge" -> com.mikael.launcher.fcl.FclModLoader.NEOFORGE
                     else -> com.mikael.launcher.fcl.FclModLoader.OPTIFINE
                 }
-                val loaderVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
-                    ?: error("Não há uma versão compatível de $selectedLoader selecionada.")
+                val loaderVersion = installLoaderVersion.takeIf { it.isNotBlank() }
+                    ?: error("Não há uma versão compatível de $installLoader selecionada.")
                 val result = com.mikael.launcher.fcl.FclModLoaderInstaller.install(
                     applicationContext, entry.id, backend, loaderVersion
                 )
-                saveProfiles(profiles + result.profileId, result.profileId)
+                saveProfiles(installedProfiles + result.profileId, result.profileId)
                 result.profileId
             } else {
                 val gameDir = FclGameDirectoryResolver.resolve(applicationContext)
@@ -453,22 +479,22 @@ private fun VersionsScreen() {
                 ) { progress ->
                     MinecraftInstallSession.reportProgress(progress)
                 }
-                if (selectedLoader == "Vanilla") {
+                if (installLoader == "Vanilla") {
                     com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(applicationContext, entry.id)
-                    saveProfiles(profiles + entry.id, entry.id)
+                    saveProfiles(installedProfiles + entry.id, entry.id)
                     entry.id
                 } else {
-                    val backend = when (selectedLoader) {
+                    val backend = when (installLoader) {
                         "Fabric" -> com.mikael.launcher.engine.java.SupportedProfileLoader.FABRIC
                         "Quilt" -> com.mikael.launcher.engine.java.SupportedProfileLoader.QUILT
-                        else -> error("O instalador real de $selectedLoader ainda não está integrado.")
+                        else -> error("O instalador real de $installLoader ainda não está integrado.")
                     }
-                    val loaderVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
-                        ?: error("Não há uma versão compatível de $selectedLoader selecionada.")
+                    val loaderVersion = installLoaderVersion.takeIf { it.isNotBlank() }
+                        ?: error("Não há uma versão compatível de $installLoader selecionada.")
                     val result = com.mikael.launcher.engine.java.ModLoaderProfileInstaller(gameDir)
                         .install(entry.id, backend, loaderVersion)
                     com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(applicationContext, result.profileId)
-                    saveProfiles(profiles + result.profileId, result.profileId)
+                    saveProfiles(installedProfiles + result.profileId, result.profileId)
                     result.profileId
                 }
             }
@@ -492,7 +518,7 @@ private fun VersionsScreen() {
     ScreenColumn("GERENCIAMENTO", "Instalar versão", "Consulte as versões oficiais do Minecraft e organize suas instalações por categoria.") {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Java", "Horizon").forEach {
-                FilterChip(selected = engine == it, onClick = {
+                FilterChip(selected = engine == it, enabled = !MinecraftInstallSession.inProgress, onClick = {
                     engine = it
                     selectedVersion = if (it == "Horizon") "Horizon Rust" else lastJavaVersion
                 }, label = { Text(it) })
@@ -506,6 +532,7 @@ private fun VersionsScreen() {
                 onValueChange = { searchText = it },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary),
+                enabled = !MinecraftInstallSession.inProgress,
                 modifier = Modifier.fillMaxWidth().background(PanelSurface, RoundedCornerShape(12.dp)).padding(13.dp),
                 decorationBox = { inner ->
                     Box {
@@ -520,7 +547,7 @@ private fun VersionsScreen() {
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 listOf("Recentes", "Snapshots", "Beta", "Alpha", "Primeiro de abril", "Todas").forEach { tab ->
-                    FilterChip(selected = selectedTab == tab, onClick = { selectedTab = tab }, label = { Text(tab, fontSize = 10.sp) })
+                    FilterChip(selected = selectedTab == tab, enabled = !MinecraftInstallSession.inProgress, onClick = { selectedTab = tab }, label = { Text(tab, fontSize = 10.sp) })
                 }
             }
 
@@ -550,8 +577,10 @@ private fun VersionsScreen() {
                                 },
                                 selected = selectedVersion == item.id,
                                 onClick = {
-                                    selectedVersion = item.id
+                                    if (!MinecraftInstallSession.inProgress) {
+                                        selectedVersion = item.id
                                     lastJavaVersion = item.id
+                                    }
                                 }
                             )
                         }
@@ -585,6 +614,7 @@ private fun VersionsScreen() {
                 listOf("Vanilla", "Forge", "NeoForge", "Fabric", "Legacy Fabric", "Quilt", "OptiFine", "Forge + OptiFine", "LiteLoader", "Rift").forEach { loader ->
                     FilterChip(
                         selected = selectedLoader == loader,
+                        enabled = !MinecraftInstallSession.inProgress,
                         onClick = {
                             selectedLoader = loader
                             prefs.edit().putString("launcher_selected_mod_loader", loader).apply()
@@ -608,7 +638,7 @@ private fun VersionsScreen() {
                 SectionLabel("VERSÃO DO FORGE")
                 Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     forgeVersions.take(8).forEach { release ->
-                        FilterChip(selected = selectedForgeVersion == release.version, onClick = { selectedForgeVersion = release.version }, label = { Text(release.version, fontSize = 9.sp) })
+                        FilterChip(selected = selectedForgeVersion == release.version, enabled = !MinecraftInstallSession.inProgress, onClick = { selectedForgeVersion = release.version }, label = { Text(release.version, fontSize = 9.sp) })
                     }
                 }
                 SectionLabel("VERSÃO DO OPTIFINE")
@@ -621,6 +651,7 @@ private fun VersionsScreen() {
                     loaderVersions.take(8).forEach { release ->
                         FilterChip(
                             selected = selectedLoaderVersion == release.version,
+                            enabled = !MinecraftInstallSession.inProgress,
                             onClick = { selectedLoaderVersion = release.version },
                             label = { Text(release.version + if (release.stable) " • estável" else "", fontSize = 9.sp) }
                         )
