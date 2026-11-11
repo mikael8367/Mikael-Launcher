@@ -47,6 +47,7 @@ internal const val PREF_RUNTIME = "selected_java_runtime"
 internal const val PREF_RENDERER = "selected_renderer"
 internal const val PREF_RAM = "selected_ram_limit"
 internal const val PREF_JVM_ARGS = "selected_jvm_arguments"
+internal const val PREF_GAME_TREE_URI = "minecraft_game_tree_uri"
 
 val JAVA_RUNTIMES = listOf("Java 8", "Java 17", "Java 21", "Java 25")
 val RENDERER_BACKENDS = listOf("GL4ES", "Zink", "VirGL", "ANGLE", "Vulkan (experimental)", "Software")
@@ -75,6 +76,7 @@ fun RuntimeSettingsPanel() {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        GameStorageLocationPanel()
         Text("RUNTIME JAVA", color = PrimaryGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Text("Runtime selecionada: $runtime", color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
