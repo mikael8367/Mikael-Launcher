@@ -541,7 +541,7 @@ internal fun retryBackoffMillis(attempt: Int): Long =
  * Runs a download with bounded retries. Only transient network/HTTP failures are
  * retried; validation errors, invalid metadata and cancellations propagate as-is.
  */
-internal suspend fun <T> retryDownload(block: () -> T): T {
+internal suspend fun <T> retryDownload(block: suspend () -> T): T {
     var attempt = 1
     while (true) {
         try {
