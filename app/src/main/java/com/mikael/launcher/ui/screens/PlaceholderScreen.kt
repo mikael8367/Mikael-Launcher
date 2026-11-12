@@ -334,6 +334,8 @@ private fun VersionsScreen() {
             "Forge" -> com.mikael.launcher.fcl.FclModLoader.FORGE
             "NeoForge" -> com.mikael.launcher.fcl.FclModLoader.NEOFORGE
             "OptiFine" -> com.mikael.launcher.fcl.FclModLoader.OPTIFINE
+            "Legacy Fabric" -> com.mikael.launcher.fcl.FclModLoader.LEGACY_FABRIC
+            "LiteLoader" -> com.mikael.launcher.fcl.FclModLoader.LITELOADER
             "Forge + OptiFine" -> null
             else -> null
         }
@@ -411,7 +413,7 @@ private fun VersionsScreen() {
     fun startInstall() {
         if (MinecraftInstallSession.inProgress) return
         val installable = selectedLoader == "Vanilla" ||
-            (selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine") && selectedLoaderVersion.isNotBlank()) ||
+            (selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine", "Legacy Fabric", "LiteLoader") && selectedLoaderVersion.isNotBlank()) ||
             (selectedLoader == "Forge + OptiFine" && selectedForgeVersion.isNotBlank() && selectedLoaderVersion.isNotBlank())
         if (!installable) {
             MinecraftInstallSession.reportError("$selectedLoader não possui um instalador compatível disponível para esta versão.")
@@ -431,10 +433,12 @@ private fun VersionsScreen() {
                 )
                 saveProfiles(profiles + result.profileId, result.profileId)
                 result.profileId
-            } else if (selectedLoader in setOf("Forge", "NeoForge", "OptiFine")) {
+            } else if (selectedLoader in setOf("Forge", "NeoForge", "OptiFine", "Legacy Fabric", "LiteLoader")) {
                 val backend = when (selectedLoader) {
                     "Forge" -> com.mikael.launcher.fcl.FclModLoader.FORGE
                     "NeoForge" -> com.mikael.launcher.fcl.FclModLoader.NEOFORGE
+                    "Legacy Fabric" -> com.mikael.launcher.fcl.FclModLoader.LEGACY_FABRIC
+                    "LiteLoader" -> com.mikael.launcher.fcl.FclModLoader.LITELOADER
                     else -> com.mikael.launcher.fcl.FclModLoader.OPTIFINE
                 }
                 val loaderVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
@@ -598,10 +602,11 @@ private fun VersionsScreen() {
                     "Vanilla" -> "Vanilla: instalação oficial do cliente e dependências."
                     "OptiFine" -> "OptiFine: patcher gráfico instalado pelo mecanismo FCL."
                     "Forge + OptiFine" -> loaderCatalogMessage
-                    "Fabric", "Quilt", "Forge", "NeoForge" -> loaderCatalogMessage
+                    "Fabric", "Quilt", "Forge", "NeoForge", "Legacy Fabric", "LiteLoader" -> loaderCatalogMessage
+                    "Rift" -> "Rift: projeto descontinuado (existia apenas para versões de teste 1.13) e sem instalador integrado."
                     else -> "$selectedLoader: instalador específico ainda não integrado. Não será exibido como instalável."
                 },
-                color = if (selectedLoader in setOf("Vanilla", "Fabric", "Quilt", "Forge", "NeoForge", "OptiFine", "Forge + OptiFine")) TextSecondary else AccentYellow,
+                color = if (selectedLoader in setOf("Vanilla", "Fabric", "Quilt", "Forge", "NeoForge", "OptiFine", "Forge + OptiFine", "Legacy Fabric", "LiteLoader")) TextSecondary else AccentYellow,
                 fontSize = 10.sp
             )
             if (selectedLoader == "Forge + OptiFine") {
@@ -613,7 +618,7 @@ private fun VersionsScreen() {
                 }
                 SectionLabel("VERSÃO DO OPTIFINE")
             }
-            if (selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine", "Forge + OptiFine")) {
+            if (selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine", "Forge + OptiFine", "Legacy Fabric", "LiteLoader")) {
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -631,7 +636,7 @@ private fun VersionsScreen() {
                 text = when {
                     MinecraftInstallSession.inProgress -> "Instalando..."
                     selectedLoader == "Vanilla" -> "⬇  Baixar e instalar Vanilla"
-                    selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine", "Forge + OptiFine") -> "⬇  Instalar $selectedLoader"
+                    selectedLoader in setOf("Fabric", "Quilt", "Forge", "NeoForge", "OptiFine", "Forge + OptiFine", "Legacy Fabric", "LiteLoader") -> "⬇  Instalar $selectedLoader"
                     else -> "$selectedLoader indisponível"
                 },
                 onClick = { startInstall() },
