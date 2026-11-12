@@ -75,7 +75,11 @@ fun LauncherScaffold(modifier: Modifier = Modifier) {
                 label = "launcher-section"
             ) { section ->
                 when (section) {
-                    LauncherSection.HOME -> HomeScreen(onNavigate = { selected = it.name }, selectedAccount = selectedAccount)
+                    LauncherSection.HOME,
+                    LauncherSection.PLAY -> HomeScreen(
+                        onNavigate = { selected = it.name },
+                        selectedAccount = selectedAccount
+                    )
                     LauncherSection.ACCOUNTS -> AccountsScreen(
                         accounts = accounts,
                         selectedAccount = selectedAccount,

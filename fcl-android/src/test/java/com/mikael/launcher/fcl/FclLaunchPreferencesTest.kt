@@ -14,10 +14,9 @@ class FclLaunchPreferencesTest {
 
     @Test
     fun `renderer known labels map to FCL ids`() {
-        assertEquals(Renderer.ID_NGGL4ES, rendererIdForLabel("GL4ES"))
+        assertEquals(Renderer.ID_GL4ES, rendererIdForLabel("GL4ES"))
         assertEquals(Renderer.ID_ZINK, rendererIdForLabel("Zink"))
-        assertEquals(Renderer.ID_VIRGL, rendererIdForLabel("VirGL"))
-        assertEquals(Renderer.ID_NGGL4ES, rendererIdForLabel("gl4es"))
+        assertEquals(Renderer.ID_VGPU, rendererIdForLabel("VGPU"))
     }
 
     @Test
@@ -28,6 +27,8 @@ class FclLaunchPreferencesTest {
         assertNull(rendererIdForLabel("ANGLE"))
         assertNull(rendererIdForLabel("Vulkan experimental"))
         assertNull(rendererIdForLabel("Software"))
+        assertEquals(Renderer.ID_VGPU, rendererIdForLabel("VirGL"))
+        assertEquals(Renderer.ID_GL4ES, rendererIdForLabel("gl4es"))
     }
 
     @Test
