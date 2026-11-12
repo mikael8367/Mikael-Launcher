@@ -48,6 +48,21 @@ jobs:
         run: gradle :fcl-android:compileDebugKotlin
       - name: Compile Android Kotlin sources
         run: gradle :app:compileDebugKotlin
+      - name: Validate merged Android manifest, assets and native packaging (without APK)
+        run: gradle :app:processDebugManifest :app:mergeDebugAssets :app:mergeDebugNativeLibs
+      - name: Verify native libraries required by FCL game launch
+        shell: bash
+        run: |
+          set -euo pipefail
+          merged_native="app/build/intermediates/merged_native_libs/debug"
+          for library in libfcl.so libpojavexec.so libpojavexec_awt.so libopenal.so libgl4es_114.so libawt_xawt.so libawt_headless.so libjsound.so libunpack200.so; do
+            path="$(find "$merged_native" -type f -name "$library" -size +0c -print -quit)"
+            if [[ -z "$path" ]]; then
+              echo "Missing required ARM64 game library: $library"
+              exit 1
+            fi
+            echo "Verified $path"
+          done
       - name: Compile FCL ARM64 native backend
         run: gradle :fcl-native:externalNativeBuildDebug
       - name: Verify FCL native libraries
