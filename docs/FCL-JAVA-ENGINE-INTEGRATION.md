@@ -25,6 +25,7 @@ A versão ARM64 é o primeiro alvo de execução. O código upstream é consumid
 - [x] Coordenador de inicialização que prepara versão, dependências, runtime, autenticação offline, JNA/LWJGL, `FCLBridge` e `JVMActivity`.
 - [x] Adaptador `FclJavaGameEngine` ligado ao contrato `GameEngine`, com descoberta de perfis, consulta de disponibilidade e inicialização real.
 - [x] Tela inicial consulta os perfis reais do repositório FCL e bloqueia o botão de iniciar quando o runtime ou renderizador não está pronto.
+- [x] Aba **Jogar** abre a mesma tela de inicialização real, evitando o botão de demonstração antigo.
 - [x] Botão **Iniciar Minecraft** ligado ao coordenador real; lista de perfis é consultada no repositório FCL.
 - [x] Preferências de runtime, renderizador e memória aplicadas a uma configuração FCL específica por versão.
 - [x] Serviço de sessão de jogo do FCL declarado no manifesto mesclado para manter a sessão em primeiro plano enquanto o jogo estiver aberto.
