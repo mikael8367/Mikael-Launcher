@@ -17,6 +17,7 @@ class FclLaunchPreferencesTest {
         assertEquals(Renderer.ID_NGGL4ES, rendererIdForLabel("GL4ES"))
         assertEquals(Renderer.ID_ZINK, rendererIdForLabel("Zink"))
         assertEquals(Renderer.ID_VIRGL, rendererIdForLabel("VirGL"))
+        assertEquals(Renderer.ID_NGGL4ES, rendererIdForLabel("gl4es"))
     }
 
     @Test
@@ -27,7 +28,6 @@ class FclLaunchPreferencesTest {
         assertNull(rendererIdForLabel("ANGLE"))
         assertNull(rendererIdForLabel("Vulkan experimental"))
         assertNull(rendererIdForLabel("Software"))
-        assertNull(rendererIdForLabel("gl4es"))
     }
 
     @Test
