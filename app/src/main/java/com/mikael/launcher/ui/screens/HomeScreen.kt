@@ -36,6 +36,7 @@ import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.mikael.launcher.fcl.FclGameLaunchCoordinator
+import com.mikael.launcher.engine.java.FclJavaGameEngine
 import com.mikael.launcher.fcl.FclLaunchPreferences
 import com.mikael.launcher.fcl.buildLaunchDiagnostic
 import com.mikael.launcher.fcl.parseMemoryMB
@@ -77,6 +78,7 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
     val context = LocalContext.current
     val hostActivity = remember(context) { findHostActivity(context) as? ComponentActivity }
     val prefs = remember { context.getSharedPreferences(VERSION_PREFS, Context.MODE_PRIVATE) }
+    val javaEngine = remember { FclJavaGameEngine() }
     var versionProfiles by remember {
         mutableStateOf(prefs.getString(INSTALLED_VERSION_PROFILES, "").orEmpty().split("\n").filter { it.isNotBlank() })
     }
@@ -96,7 +98,7 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
 
     LaunchedEffect(Unit) {
         try {
-            val actualProfiles = FclGameLaunchCoordinator.installedVersionIds(context.applicationContext)
+            val actualProfiles = javaEngine.installedVersionIds(context.applicationContext)
             versionProfiles = actualProfiles
             val saved = prefs.getString(SELECTED_VERSION_PROFILE, "").orEmpty()
             selectedVersion = saved.takeIf { it in actualProfiles }
@@ -177,7 +179,7 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
                         )
                         hostActivity.lifecycleScope.launch {
                             try {
-                                FclGameLaunchCoordinator.launch(hostActivity, selectedVersion, selectedAccount, launchPreferences)
+                                javaEngine.launch(hostActivity, selectedVersion, selectedAccount, launchPreferences)
                                 launchDialogMessage = null
                             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                                 throw cancelled
