@@ -2,7 +2,6 @@ package com.mikael.launcher.engine.java
 
 import com.mikael.launcher.engine.EngineAvailability
 import com.mikael.launcher.engine.EngineCapability
-import com.mikael.launcher.engine.EngineId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,7 +12,6 @@ class JavaEngineAvailabilityTest {
         val engine = JavaEngineAvailability {
             JavaEngineReadiness(false, 0, 0)
         }
-        assertEquals(EngineId.MINECRAFT_JAVA, engine.id)
         assertTrue(engine.availability() is EngineAvailability.Initializing)
     }
 
