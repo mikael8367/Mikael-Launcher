@@ -18,7 +18,9 @@ enum class FclModLoader(val patchId: String, val componentType: GameComponentTyp
     FORGE("forge", GameComponentType.FORGE),
     NEOFORGE("neoforge", GameComponentType.NEO_FORGE),
     OPTIFINE("optifine", GameComponentType.OPTIFINE),
-    FORGE_OPTIFINE("forge-optifine", GameComponentType.FORGE)
+    FORGE_OPTIFINE("forge-optifine", GameComponentType.FORGE),
+    LEGACY_FABRIC("legacyfabric", GameComponentType.LEGACY_FABRIC),
+    LITELOADER("liteloader", GameComponentType.LITELOADER)
 }
 
 data class FclModLoaderRelease(
@@ -37,6 +39,9 @@ data class FclModLoaderInstallResult(
  * Uses FCL's own component metadata, dependency graph and installer processors.
  * Forge/NeoForge use FCL's processors; OptiFine uses FCL's dedicated patcher
  * and isolated JVM processor runner. Resulting profiles are saved by FCL.
+ * Legacy Fabric and LiteLoader reuse the same generic component pipeline:
+ * the pinned FCL registers LegacyFabricVersionList and LiteLoaderVersionList
+ * (with matching install tasks) in MojangDownloadProvider.
  */
 object FclModLoaderInstaller {
     suspend fun availableVersions(
