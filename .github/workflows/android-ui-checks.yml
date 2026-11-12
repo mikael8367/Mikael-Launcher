@@ -48,6 +48,8 @@ jobs:
         run: gradle :fcl-android:compileDebugKotlin
       - name: Compile Android Kotlin sources
         run: gradle :app:compileDebugKotlin
+      - name: Validate merged Android manifest, assets and native packaging (without APK)
+        run: gradle :app:processDebugManifest :app:mergeDebugAssets :app:mergeDebugNativeLibs
       - name: Compile FCL ARM64 native backend
         run: gradle :fcl-native:externalNativeBuildDebug
       - name: Verify FCL native libraries
