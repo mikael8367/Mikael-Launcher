@@ -104,11 +104,13 @@ class MinecraftInstallForegroundService : Service() {
                 }
                 FclModLoaderInstaller.installForgeOptiFine(context, entryId, args.forgeVersion, args.loaderVersion).profileId
             }
-            args.loader in setOf("Forge", "NeoForge", "OptiFine") -> {
+            args.loader in setOf("Forge", "NeoForge", "OptiFine", "Legacy Fabric", "LiteLoader") -> {
                 require(args.loaderVersion.isNotBlank()) { "Selecione uma versão de ${args.loader}." }
                 val backend = when (args.loader) {
                     "Forge" -> FclModLoader.FORGE
                     "NeoForge" -> FclModLoader.NEOFORGE
+                    "Legacy Fabric" -> FclModLoader.LEGACY_FABRIC
+                    "LiteLoader" -> FclModLoader.LITELOADER
                     else -> FclModLoader.OPTIFINE
                 }
                 FclModLoaderInstaller.install(context, entryId, backend, args.loaderVersion).profileId
