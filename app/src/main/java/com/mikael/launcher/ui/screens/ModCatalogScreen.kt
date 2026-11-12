@@ -47,6 +47,7 @@ import com.mikael.launcher.ui.theme.PrimaryGreen
 import com.mikael.launcher.ui.theme.Surface as PanelSurface
 import com.mikael.launcher.ui.theme.TextPrimary
 import com.mikael.launcher.ui.theme.TextSecondary
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
@@ -126,6 +127,9 @@ fun ModCatalogScreen() {
                 hasMore = shouldContinuePaging(previousCount, mods.size, result.mods.size, MOD_PAGE_SIZE)
                 message = result.notice ?: if (mods.isEmpty()) "Nenhum mod encontrado para esses filtros." else ""
             } catch (error: Exception) {
+                // Cancelamento do escopo (usuário saiu da tela) não é falha de
+                // consulta: engoli-lo deixaria estado stale e quebraria o finally.
+                if (error is CancellationException) throw error
                 message = error.message ?: "Não foi possível consultar os catálogos."
                 if (reset) mods = emptyList()
                 hasMore = false

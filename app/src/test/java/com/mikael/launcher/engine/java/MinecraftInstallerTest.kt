@@ -238,6 +238,14 @@ class MinecraftInstallerRetryTest {
     }
 
     @Test
+    fun treatsCorruptedDownloadsAsRetryableWithAFreshPart() {
+        // A file that fails its SHA-1/size check after download must be retried
+        // from a clean state instead of aborting the whole install.
+        val error = CorruptDownloadException("Arquivo inválido após download: 1.12.2.jar")
+        assert(minecraftIsRetryableDownloadFailure(error))
+    }
+
+    @Test
     fun backoffGrowsAndIsCapped() {
         assertEquals(1000L, retryBackoffMillis(1))
         assertEquals(2000L, retryBackoffMillis(2))

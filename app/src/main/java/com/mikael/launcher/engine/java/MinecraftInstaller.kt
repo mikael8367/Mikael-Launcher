@@ -11,6 +11,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -55,6 +56,7 @@ class MinecraftInstaller(
         private val installLocks = ConcurrentHashMap<String, Mutex>()
 
         private const val PROGRESS_MIN_INTERVAL_MS = 150L
+        private const val USER_AGENT = "MikaelLauncher/0.1.0 (Minecraft asset installer)"
     }
 
     suspend fun install(
@@ -126,7 +128,11 @@ class MinecraftInstaller(
         if (assetIndexInfo != null) {
             val indexId = assetIndexInfo.optString("id").ifBlank { versionId }
             val indexFile = safeResolve(root, "assets/indexes/$indexId.json")
-            val indexText = readUrl(assetIndexInfo.getString("url")).toString(Charsets.UTF_8)
+            val indexUrl = assetIndexInfo.optString("url").trim()
+            require(indexUrl.startsWith("https://")) {
+                "Os metadados desta versão não informam uma URL HTTPS válida para o índice de assets."
+            }
+            val indexText = readUrl(indexUrl).toString(Charsets.UTF_8)
             val expectedIndexSha1 = assetIndexInfo.optString("sha1")
             if (expectedIndexSha1.isNotBlank() && sha1(indexText.toByteArray()) != expectedIndexSha1.lowercase()) {
                 error("O índice de assets está corrompido (SHA-1 inválido).")
@@ -210,7 +216,11 @@ class MinecraftInstaller(
         }
 
         // Legacy clients read assets by logical path rather than hash. Materialize
-        // the virtual legacy tree (and the older resources tree when requested).
+        // the trees exactly where FCL's DefaultGameRepository.reconstructAssets
+        // expects them: virtual indexes under assets/virtual/<assetIndexId> and
+        // map_to_resources indexes under <gameDir>/resources. Hardcoding "legacy"
+        // or writing assets/resources/ would leave pre-1.6 versions (index
+        // "pre-1.6") with sounds/textures in places the game never reads.
         val assetIndexForAliases = assetIndexInfo?.let {
             val indexId = it.optString("id").ifBlank { versionId }
             val indexFile = safeResolve(root, "assets/indexes/$indexId.json")
@@ -221,6 +231,9 @@ class MinecraftInstaller(
             val virtualLegacy = assetIndexForAliases.optBoolean("virtual", false)
             val mapToResources = assetIndexForAliases.optBoolean("map_to_resources", false)
             if (virtualLegacy || mapToResources) {
+                val aliasIndexId = assetIndexForAliases.let {
+                    assetIndexInfo.optString("id").ifBlank { versionId }
+                }
                 for (asset in entries) {
                     if (!minecraftAssetRequiredOnAndroid(asset.name)) continue
                     val source = safeResolve(
@@ -229,14 +242,14 @@ class MinecraftInstaller(
                     )
                     if (!source.isFile) error("Asset ausente após download: ${asset.name}")
                     if (virtualLegacy) {
-                        val target = safeResolve(root, "assets/virtual/legacy/${asset.name}")
+                        val target = safeResolve(root, "assets/virtual/$aliasIndexId/${asset.name}")
                         if (!isValid(target, asset.hash, asset.size)) {
                             target.parentFile?.let { ensureDirectory(it, "pasta de assets legados") }
                             source.copyTo(target, overwrite = true)
                         }
                     }
                     if (mapToResources) {
-                        val target = safeResolve(root, "assets/resources/${asset.name}")
+                        val target = safeResolve(root, "resources/${asset.name}")
                         if (!isValid(target, asset.hash, asset.size)) {
                             target.parentFile?.let { ensureDirectory(it, "pasta de resources legados") }
                             source.copyTo(target, overwrite = true)
@@ -288,27 +301,16 @@ class MinecraftInstaller(
         if (task.target.isFile && isValid(task.target, task.sha1, task.size)) return
         retryDownload {
             // A previous failed attempt (including a cancelled install) must not
-            // leave an abandoned ".part" file behind.
+            // leave an abandoned ".part" file behind in a corrupt state.
             val part = File(task.target.parentFile, task.target.name + ".part")
             try {
-                if (part.exists()) part.delete()
-                val connection = openHttpsConnection(task.url, "MikaelLauncher/0.1.0 (Minecraft asset installer)")
-                try {
-                    connection.inputStream.use { input ->
-                        part.outputStream().buffered().use { output ->
-                            val buffer = ByteArray(64 * 1024)
-                            while (true) {
-                                val read = input.read(buffer)
-                                if (read < 0) break
-                                output.write(buffer, 0, read)
-                            }
-                        }
-                    }
-                } finally {
-                    connection.disconnect()
-                }
+                resumeOrDownload(task, part)
                 if (!isValid(part, task.sha1, task.size)) {
-                    error("Arquivo inválido após download: ${task.label}")
+                    // The assembled content is corrupt: discard the part so the
+                    // retried attempt starts from a clean state instead of
+                    // appending to bad data forever.
+                    part.delete()
+                    throw CorruptDownloadException("Arquivo inválido após download: ${task.label}")
                 }
                 if (task.target.exists() && !task.target.delete()) {
                     error("Não foi possível substituir ${task.target.name}")
@@ -318,9 +320,73 @@ class MinecraftInstaller(
                     part.delete()
                 }
             } catch (error: Throwable) {
-                part.delete()
+                // Keep a partial part across transient IO failures so the next
+                // attempt resumes from where it stopped. Cancellation, corruption
+                // and validation failures must start from a clean state.
+                if (error !is IOException || error is CorruptDownloadException) part.delete()
                 throw error
             }
+        }
+    }
+
+    /**
+     * Fills the ".part" file, resuming an interrupted download when the server
+     * supports HTTP Range requests. A 206 response appends to the existing part;
+     * a 200 response (Range ignored), a 416 (stale/oversized part) or a missing
+     * part restart the download from scratch. The final SHA-1/size validation in
+     * [download] guarantees a resumed file is byte-identical to the original.
+     */
+    private suspend fun resumeOrDownload(task: DownloadTask, part: File) {
+        val partLength = if (part.isFile) part.length() else 0L
+        if (partLength > 0L) {
+            val appended = try {
+                val connection = openHttpsConnection(task.url, USER_AGENT, partLength)
+                try {
+                    if (connection.responseCode == HttpURLConnection.HTTP_PARTIAL) {
+                        connection.inputStream.use { input ->
+                            FileOutputStream(part, true).buffered().use { output ->
+                                val buffer = ByteArray(64 * 1024)
+                                while (true) {
+                                    val read = input.read(buffer)
+                                    if (read < 0) break
+                                    output.write(buffer, 0, read)
+                                }
+                            }
+                        }
+                        true
+                    } else {
+                        // Server ignored the Range header (200): restart from scratch.
+                        false
+                    }
+                } finally {
+                    connection.disconnect()
+                }
+            } catch (error: HttpDownloadException) {
+                if (error.statusCode == 416) {
+                    // Stale part at or beyond the remote size: discard and restart.
+                    false
+                } else {
+                    throw error
+                }
+            }
+            if (appended) return
+        } else if (part.exists()) {
+            part.delete()
+        }
+        val connection = openHttpsConnection(task.url, USER_AGENT)
+        try {
+            connection.inputStream.use { input ->
+                part.outputStream().buffered().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                    }
+                }
+            }
+        } finally {
+            connection.disconnect()
         }
     }
 
@@ -364,7 +430,7 @@ class MinecraftInstaller(
         }
     }
 
-    private fun openHttpsConnection(initialUrl: String, userAgent: String): HttpURLConnection {
+    private fun openHttpsConnection(initialUrl: String, userAgent: String, rangeStart: Long = 0L): HttpURLConnection {
         require(initialUrl.startsWith("https://")) { "Download HTTP inseguro bloqueado." }
         var currentUrl = URL(initialUrl)
         repeat(6) {
@@ -374,6 +440,9 @@ class MinecraftInstaller(
             connection.readTimeout = 45000
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("User-Agent", userAgent)
+            if (rangeStart > 0L) {
+                connection.setRequestProperty("Range", "bytes=$rangeStart-")
+            }
             val status = try {
                 connection.responseCode
             } catch (error: Exception) {
@@ -446,6 +515,12 @@ internal fun minecraftAssetRequiredOnAndroid(name: String): Boolean =
  */
 internal class HttpDownloadException(val statusCode: Int?, message: String) : RuntimeException(message)
 
+/**
+ * The downloaded content does not match its declared SHA-1/size. The partial
+ * file is discarded and a fresh retry can fix a transient corruption in transit.
+ */
+internal class CorruptDownloadException(message: String) : RuntimeException(message)
+
 /** HTTP statuses that describe transient traffic/server failures worth retrying. */
 private val RETRYABLE_HTTP_STATUS_CODES = setOf(408, 429, 500, 502, 503, 504)
 
@@ -454,6 +529,7 @@ private const val DOWNLOAD_MAX_ATTEMPTS = 3
 
 internal fun minecraftIsRetryableDownloadFailure(error: Throwable): Boolean = when (error) {
     is HttpDownloadException -> error.statusCode in RETRYABLE_HTTP_STATUS_CODES
+    is CorruptDownloadException -> true
     is IOException -> true
     else -> false
 }
@@ -465,7 +541,7 @@ internal fun retryBackoffMillis(attempt: Int): Long =
  * Runs a download with bounded retries. Only transient network/HTTP failures are
  * retried; validation errors, invalid metadata and cancellations propagate as-is.
  */
-internal suspend fun <T> retryDownload(block: () -> T): T {
+internal suspend fun <T> retryDownload(block: suspend () -> T): T {
     var attempt = 1
     while (true) {
         try {
