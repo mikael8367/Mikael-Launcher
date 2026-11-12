@@ -209,12 +209,9 @@ object FclEngineBootstrap {
                     }
                 }
 
-                val installedRuntimes = File(FCLPath.JAVA_PATH)
-                    .listFiles()
-                    .orEmpty()
-                    .filter { it.isDirectory && File(it, "release").isFile }
-                    .map { it.name }
-                    .sorted()
+                // Report only runtimes that pass the same version/ARM64 validation
+                // used by the installer; a stale release file is not enough.
+                val installedRuntimes = FclRuntimeInstaller.installedRuntimes()
 
                 val selectedProfile = runCatching { Profiles.getSelectedProfile() }.getOrNull()
                 val privateGameDirectory = selectedProfile?.let { profile ->
