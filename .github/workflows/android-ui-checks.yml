@@ -16,8 +16,6 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout (including pinned FCL source)
         uses: actions/checkout@v4
@@ -57,16 +55,8 @@ jobs:
           find fcl-native/build -type f -name '*.so' -print
           test -n "$(find fcl-native/build -type f -name 'libpojavexec.so' -print -quit)"
           test -n "$(find fcl-native/build -type f -name 'libfcl.so' -print -quit)"
-      - name: Run FCL runtime layout and app unit tests (diagnostic capture)
-        run: set -o pipefail; gradle :fcl-android:testDebugUnitTest :app:testDebugUnitTest --stacktrace 2>&1 | tee gradle-test-output.log
-      - name: Publish failure log to repository (diagnostic, temporary)
-        if: failure()
-        run: |
-          git config user.name "mikael-ci-bot"
-          git config user.email "mikael-ci-bot@users.noreply.github.com"
-          git add -f gradle-test-output.log
-          git commit -m "ci: capture unit test failure log [skip ci]"
-          git push origin HEAD:feature/java-engine-fcl-foundation
+      - name: Run FCL runtime layout and app unit tests
+        run: gradle :fcl-android:testDebugUnitTest :app:testDebugUnitTest
 
   horizon-android-arm64:
     runs-on: ubuntu-latest
