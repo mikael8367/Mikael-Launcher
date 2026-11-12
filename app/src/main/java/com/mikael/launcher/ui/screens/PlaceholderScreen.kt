@@ -132,6 +132,7 @@ internal object MinecraftInstallSession {
         inProgress = true
         error = null
         progress = null
+        finishedProfileId = null
     }
 
     /** Publica o resultado do serviço foreground na UI. */
@@ -143,6 +144,7 @@ internal object MinecraftInstallSession {
     /** Publica falha do serviço foreground na UI. */
     fun failExternal(message: String) {
         error = message
+        finishedProfileId = null
         inProgress = false
     }
 
