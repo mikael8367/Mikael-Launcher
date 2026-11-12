@@ -85,10 +85,15 @@ object FclRuntimeInstaller {
         val javaPath = FCLPath.JAVA_PATH?.takeIf { it.isNotBlank() } ?: return emptyList()
         val javaRoot = File(javaPath)
         if (!javaRoot.isDirectory) return emptyList()
-        return javaRoot.listFiles()
-            .orEmpty()
-            .filter { it.isDirectory && File(it, "release").isFile }
-            .map { it.name }
+        // A release file alone does not prove that a runtime is usable. Validate
+        // the selected supported JRE's version, executable and ARM64 ELF binaries
+        // before exposing it as installed in the settings UI.
+        return FclJavaRuntime.values()
+            .filter { runtime ->
+                val root = File(javaRoot, runtime.directoryName)
+                root.isDirectory && runCatching { validateRuntime(root, runtime) }.isSuccess
+            }
+            .map { it.directoryName }
             .sorted()
     }
 
