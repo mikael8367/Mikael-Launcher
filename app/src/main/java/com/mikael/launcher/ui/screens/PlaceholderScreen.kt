@@ -276,6 +276,16 @@ private fun isAprilFoolsVersion(id: String): Boolean {
         normalized.contains("craftmine")
 }
 
+/**
+ * Instaladores que consultam a própria fonte de metadados (pipeline FCL, para
+ * Forge/NeoForge/OptiFine/Legacy Fabric/LiteLoader/Forge+OptiFine) baixam o JSON
+ * oficial da versão-base por conta própria e não dependem do catálogo da Mojang
+ * estar carregado na tela. Vanilla, Fabric e Quilt precisam da entrada oficial
+ * (URL/SHA-1 do manifesto) para instalar a base antes do perfil do loader.
+ */
+internal fun installRequiresOfficialManifest(loader: String): Boolean =
+    loader == "Vanilla" || loader == "Fabric" || loader == "Quilt"
+
 @Composable
 private fun VersionsScreen() {
     val context = LocalContext.current
@@ -356,6 +366,7 @@ private fun VersionsScreen() {
                     "Selecione uma versão de Forge e uma versão de OptiFine. O patch será aplicado nessa ordem."
                 }
             } catch (error: Exception) {
+                if (error is CancellationException) throw error
                 forgeVersions = emptyList()
                 loaderVersions = emptyList()
                 selectedForgeVersion = ""
@@ -387,6 +398,7 @@ private fun VersionsScreen() {
                     "${releases.size} versões compatíveis encontradas."
                 }
             } catch (error: Exception) {
+                if (error is CancellationException) throw error
                 loaderVersions = emptyList()
                 selectedLoaderVersion = ""
                 loaderCatalogMessage = error.message ?: "Falha ao consultar o catálogo de $selectedLoader."
@@ -421,15 +433,24 @@ private fun VersionsScreen() {
         }
         val applicationContext = context.applicationContext
         MinecraftInstallSession.start {
-            val entry = catalog.firstOrNull { it.id == selectedVersion }
-                ?: error("A versão selecionada não está disponível no catálogo oficial.")
+            // Loaders com backend FCL baixam o JSON oficial da versão-base por
+            // conta própria; exigir a entrada do catálogo aqui bloquearia a
+            // instalação quando a consulta ao manifesto da Mojang falhou ou
+            // ainda não terminou. Vanilla/Fabric/Quilt precisam dela.
+            val entry = if (installRequiresOfficialManifest(selectedLoader)) {
+                catalog.firstOrNull { it.id == selectedVersion }
+                    ?: error("A versão selecionada não está disponível no catálogo oficial.")
+            } else {
+                null
+            }
+            val versionId = entry?.id ?: selectedVersion
             if (selectedLoader == "Forge + OptiFine") {
                 val forgeVersion = selectedForgeVersion.takeIf { it.isNotBlank() }
                     ?: error("Selecione uma versão de Forge compatível.")
                 val optiFineVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
                     ?: error("Selecione uma versão de OptiFine compatível.")
                 val result = com.mikael.launcher.fcl.FclModLoaderInstaller.installForgeOptiFine(
-                    applicationContext, entry.id, forgeVersion, optiFineVersion
+                    applicationContext, versionId, forgeVersion, optiFineVersion
                 )
                 saveProfiles(profiles + result.profileId, result.profileId)
                 result.profileId
@@ -444,23 +465,23 @@ private fun VersionsScreen() {
                 val loaderVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
                     ?: error("Não há uma versão compatível de $selectedLoader selecionada.")
                 val result = com.mikael.launcher.fcl.FclModLoaderInstaller.install(
-                    applicationContext, entry.id, backend, loaderVersion
+                    applicationContext, versionId, backend, loaderVersion
                 )
                 saveProfiles(profiles + result.profileId, result.profileId)
                 result.profileId
             } else {
                 val gameDir = FclGameDirectoryResolver.resolve(applicationContext)
                 MinecraftInstaller(gameDir).install(
-                    versionId = entry.id,
-                    metadataUrl = entry.url,
-                    metadataSha1 = entry.sha1
+                    versionId = versionId,
+                    metadataUrl = entry?.url.orEmpty(),
+                    metadataSha1 = entry?.sha1
                 ) { progress ->
                     MinecraftInstallSession.reportProgress(progress)
                 }
                 if (selectedLoader == "Vanilla") {
-                    com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(applicationContext, entry.id)
-                    saveProfiles(profiles + entry.id, entry.id)
-                    entry.id
+                    com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(applicationContext, versionId)
+                    saveProfiles(profiles + versionId, versionId)
+                    versionId
                 } else {
                     val backend = when (selectedLoader) {
                         "Fabric" -> com.mikael.launcher.engine.java.SupportedProfileLoader.FABRIC
@@ -470,7 +491,7 @@ private fun VersionsScreen() {
                     val loaderVersion = selectedLoaderVersion.takeIf { it.isNotBlank() }
                         ?: error("Não há uma versão compatível de $selectedLoader selecionada.")
                     val result = com.mikael.launcher.engine.java.ModLoaderProfileInstaller(gameDir)
-                        .install(entry.id, backend, loaderVersion)
+                        .install(versionId, backend, loaderVersion)
                     com.mikael.launcher.fcl.FclEngineBootstrap.refreshAndSelectGameVersion(applicationContext, result.profileId)
                     saveProfiles(profiles + result.profileId, result.profileId)
                     result.profileId
