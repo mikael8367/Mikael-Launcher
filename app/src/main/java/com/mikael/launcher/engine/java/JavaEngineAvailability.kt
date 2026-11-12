@@ -3,8 +3,6 @@ package com.mikael.launcher.engine.java
 import android.os.Build
 import com.mikael.launcher.engine.EngineAvailability
 import com.mikael.launcher.engine.EngineCapability
-import com.mikael.launcher.engine.EngineId
-import com.mikael.launcher.engine.GameEngine
 import com.mikael.launcher.fcl.FclEngineBootstrap
 import com.mikael.launcher.fcl.FclRuntimeInstaller
 import com.tungsten.fclauncher.utils.FCLPath
@@ -16,10 +14,8 @@ import java.io.File
  */
 class JavaEngineAvailability(
     private val readinessProvider: () -> JavaEngineReadiness = ::readFclReadiness
-) : GameEngine {
-    override val id: EngineId = EngineId.MINECRAFT_JAVA
-
-    override fun availability(): EngineAvailability {
+) {
+    fun availability(): EngineAvailability {
         val readiness = runCatching(readinessProvider).getOrElse { failure ->
             JavaEngineReadiness(
                 initialized = false,
