@@ -20,9 +20,19 @@ class JavaEngineAvailability(
     override val id: EngineId = EngineId.MINECRAFT_JAVA
 
     override fun availability(): EngineAvailability {
-        val readiness = readinessProvider()
+        val readiness = runCatching(readinessProvider).getOrElse { failure ->
+            JavaEngineReadiness(
+                initialized = false,
+                validRuntimeCount = 0,
+                rendererCount = 0,
+                failureMessage = failure.message ?: "Falha ao verificar o motor FCL."
+            )
+        }
         if (readiness.failureMessage != null) {
-            return EngineAvailability.Unavailable("bootstrap_failed", readiness.failureMessage)
+            return EngineAvailability.Unavailable(
+                "bootstrap_failed",
+                readiness.failureMessage.ifBlank { "Falha ao verificar o motor FCL." }
+            )
         }
         if (!readiness.initialized) return EngineAvailability.Initializing
         if (readiness.validRuntimeCount == 0) {
@@ -71,12 +81,22 @@ private fun readFclReadiness(): JavaEngineReadiness {
     val abi = Build.SUPPORTED_ABIS.firstOrNull()
         ?: return JavaEngineReadiness(true, 0, status.rendererCount)
     val javaRoot = FCLPath.JAVA_PATH?.takeIf { it.isNotBlank() }?.let(::File)
-    val validRuntimeCount = if (abi == "arm64-v8a" && javaRoot != null) {
-        FclRuntimeInstaller.installedRuntimes().count { runtimeName ->
-            JavaRuntimeInspector.inspect(File(javaRoot, runtimeName), abi) is JavaRuntimeInspection.Valid
+    val runtimeCheck = runCatching {
+        if (abi == "arm64-v8a" && javaRoot != null) {
+            FclRuntimeInstaller.installedRuntimes().count { runtimeName ->
+                JavaRuntimeInspector.inspect(File(javaRoot, runtimeName), abi) is JavaRuntimeInspection.Valid
+            }
+        } else {
+            0
         }
-    } else {
-        0
+    }
+    val validRuntimeCount = runtimeCheck.getOrElse { failure ->
+        return JavaEngineReadiness(
+            initialized = true,
+            validRuntimeCount = 0,
+            rendererCount = status.rendererCount,
+            failureMessage = failure.message ?: "Não foi possível verificar os runtimes Java."
+        )
     }
     return JavaEngineReadiness(
         initialized = true,
