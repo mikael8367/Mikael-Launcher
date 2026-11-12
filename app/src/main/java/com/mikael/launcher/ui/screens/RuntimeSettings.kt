@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import com.mikael.launcher.fcl.FclEngineBootstrap
 import com.mikael.launcher.fcl.FclJavaRuntime
 import com.mikael.launcher.fcl.FclRuntimeInstaller
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import com.mikael.launcher.ui.theme.OutlineSoft
 import com.mikael.launcher.ui.theme.PrimaryGreen
@@ -154,7 +155,9 @@ fun RuntimeSettingsPanel() {
                         }
                         installedRuntimes = FclRuntimeInstaller.installedRuntimes().toSet()
                         installDetail = result.message
-                    } catch (error: Throwable) {
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
                         installDetail = "Falha: ${error.message ?: error.javaClass.simpleName}"
                     } finally {
                         installing = false
