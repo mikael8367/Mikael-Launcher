@@ -200,6 +200,14 @@ class MinecraftInstallForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        if (workerStarted && MinecraftInstallSession.inProgress) {
+            MinecraftInstallSession.failExternal(
+                "A instalação foi interrompida pelo Android. Verifique o espaço livre e tente novamente."
+            )
+            runCatching {
+                updateNotification("Instalação interrompida", null, null, false)
+            }
+        }
         scope.cancel()
         super.onDestroy()
     }
