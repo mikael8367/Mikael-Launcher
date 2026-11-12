@@ -37,6 +37,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.mikael.launcher.fcl.FclGameLaunchCoordinator
 import com.mikael.launcher.engine.java.FclJavaGameEngine
+import com.mikael.launcher.engine.EngineAvailability
 import com.mikael.launcher.fcl.FclLaunchPreferences
 import com.mikael.launcher.fcl.buildLaunchDiagnostic
 import com.mikael.launcher.fcl.parseMemoryMB
@@ -143,9 +144,18 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
             selectedVersion = selectedVersion,
             onChooseVersion = { showVersionPicker = true },
             onStart = {
+                val engineAvailability = javaEngine.availability()
                 when {
                     isRefreshingVersions -> {
                         launchDialogMessage = "Aguarde: verificando as versões instaladas no FCL."
+                        launchDiagnostic = null
+                    }
+                    engineAvailability is EngineAvailability.Initializing -> {
+                        launchDialogMessage = "O motor Minecraft Java ainda está inicializando. Aguarde alguns segundos."
+                        launchDiagnostic = null
+                    }
+                    engineAvailability is EngineAvailability.Unavailable -> {
+                        launchDialogMessage = engineAvailability.message
                         launchDiagnostic = null
                     }
                     selectedVersion.isBlank() -> {
