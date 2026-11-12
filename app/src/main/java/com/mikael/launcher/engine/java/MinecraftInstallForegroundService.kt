@@ -79,6 +79,7 @@ class MinecraftInstallForegroundService : Service() {
                 MinecraftInstallSession.completeExternal(resultProfile)
                 updateNotification("Instalação concluída: $resultProfile", 1, 1, false)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                MinecraftInstallSession.failExternal("Instalação cancelada.")
                 throw cancelled
             } catch (failure: Exception) {
                 MinecraftInstallSession.failExternal(failure.message ?: "Falha desconhecida durante a instalação.")
