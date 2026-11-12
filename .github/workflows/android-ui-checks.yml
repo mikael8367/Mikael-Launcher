@@ -55,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           merged_native="app/build/intermediates/merged_native_libs/debug"
-          for library in libfcl.so libpojavexec.so libpojavexec_awt.so libopenal.so libgl4es_114.so; do
+          for library in libfcl.so libpojavexec.so libpojavexec_awt.so libopenal.so libgl4es_114.so libawt_xawt.so libawt_headless.so libjsound.so libunpack200.so; do
             path="$(find "$merged_native" -type f -name "$library" -size +0c -print -quit)"
             if [[ -z "$path" ]]; then
               echo "Missing required ARM64 game library: $library"
