@@ -35,9 +35,9 @@ data class FclLaunchPreferences(
  * inicialização com "renderizador não encontrado".
  */
 fun rendererIdForLabel(label: String?): String? = when (label?.trim()?.lowercase()) {
-    "gl4es" -> Renderer.ID_NGGL4ES
+    "gl4es" -> Renderer.ID_GL4ES
     "zink" -> Renderer.ID_ZINK
-    "virgl" -> Renderer.ID_VIRGL
+    "vgpu", "virgl" -> Renderer.ID_VGPU
     else -> null
 }
 

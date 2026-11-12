@@ -36,11 +36,14 @@ import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.mikael.launcher.fcl.FclGameLaunchCoordinator
+import com.mikael.launcher.engine.java.FclJavaGameEngine
+import com.mikael.launcher.engine.EngineAvailability
 import com.mikael.launcher.fcl.FclLaunchPreferences
 import com.mikael.launcher.fcl.buildLaunchDiagnostic
 import com.mikael.launcher.fcl.parseMemoryMB
 import com.mikael.launcher.fcl.runtimeFolderForLabel
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,6 +79,7 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
     val context = LocalContext.current
     val hostActivity = remember(context) { findHostActivity(context) as? ComponentActivity }
     val prefs = remember { context.getSharedPreferences(VERSION_PREFS, Context.MODE_PRIVATE) }
+    val javaEngine = remember { FclJavaGameEngine() }
     var versionProfiles by remember {
         mutableStateOf(prefs.getString(INSTALLED_VERSION_PROFILES, "").orEmpty().split("\n").filter { it.isNotBlank() })
     }
@@ -91,6 +95,27 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
     var launchDialogMessage by remember { mutableStateOf<String?>(null) }
     var launchDiagnostic by remember { mutableStateOf<String?>(null) }
     var diagnosticCopied by remember { mutableStateOf(false) }
+    var isRefreshingVersions by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        try {
+            val actualProfiles = javaEngine.installedVersionIds(context.applicationContext)
+            versionProfiles = actualProfiles
+            val saved = prefs.getString(SELECTED_VERSION_PROFILE, "").orEmpty()
+            selectedVersion = saved.takeIf { it in actualProfiles }
+                ?: actualProfiles.firstOrNull().orEmpty()
+            prefs.edit()
+                .putString(INSTALLED_VERSION_PROFILES, actualProfiles.joinToString("\n"))
+                .putString(SELECTED_VERSION_PROFILE, selectedVersion)
+                .apply()
+        } catch (_: Exception) {
+            // Keep the last saved selection visible; the launch dialog will show
+            // the detailed FCL diagnostic if the profile cannot be resolved.
+        } finally {
+            isRefreshingVersions = false
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -119,7 +144,20 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
             selectedVersion = selectedVersion,
             onChooseVersion = { showVersionPicker = true },
             onStart = {
+                val engineAvailability = javaEngine.availability()
                 when {
+                    isRefreshingVersions -> {
+                        launchDialogMessage = "Aguarde: verificando as versões instaladas no FCL."
+                        launchDiagnostic = null
+                    }
+                    engineAvailability is EngineAvailability.Initializing -> {
+                        launchDialogMessage = "O motor Minecraft Java ainda está inicializando. Aguarde alguns segundos."
+                        launchDiagnostic = null
+                    }
+                    engineAvailability is EngineAvailability.Unavailable -> {
+                        launchDialogMessage = engineAvailability.message
+                        launchDiagnostic = null
+                    }
                     selectedVersion.isBlank() -> {
                         launchDialogMessage = "Selecione uma versão instalada antes de iniciar."
                         launchDiagnostic = null
@@ -144,14 +182,14 @@ fun HomeScreen(onNavigate: (LauncherSection) -> Unit, selectedAccount: String) {
                         val appPrefs = context.getSharedPreferences(VERSION_PREFS, Context.MODE_PRIVATE)
                         val launchPreferences = FclLaunchPreferences(
                             runtimeFolder = runtimeFolderForLabel(appPrefs.getString(PREF_RUNTIME, null)),
-                            rendererLabel = appPrefs.getString(PREF_RENDERER, null),
+                            rendererLabel = appPrefs.getString(PREF_RENDERER, "GL4ES"),
                             memoryMB = parseMemoryMB(appPrefs.getString(PREF_RAM, null)),
                             autoMemory = appPrefs.getBoolean("perf_auto_ram", true),
                             javaArgs = appPrefs.getString(PREF_JVM_ARGS, null)
                         )
                         hostActivity.lifecycleScope.launch {
                             try {
-                                FclGameLaunchCoordinator.launch(hostActivity, selectedVersion, selectedAccount, launchPreferences)
+                                javaEngine.launch(hostActivity, selectedVersion, selectedAccount, launchPreferences)
                                 launchDialogMessage = null
                             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                                 throw cancelled
