@@ -54,6 +54,16 @@ class JavaEngineAvailabilityTest {
     }
 
     @Test
+    fun convertsReadinessInspectionExceptionsIntoUnavailableState() {
+        val state = JavaEngineAvailability {
+            throw IllegalStateException("Runtime metadata is corrupted")
+        }.availability()
+
+        assertTrue(state is EngineAvailability.Unavailable)
+        assertEquals("bootstrap_failed", (state as EngineAvailability.Unavailable).reasonCode)
+    }
+
+    @Test
     fun reportsBootstrapFailure() {
         val state = JavaEngineAvailability {
             JavaEngineReadiness(false, 0, 0, "Falha no FCL")
