@@ -384,6 +384,15 @@ private fun VersionsScreen() {
     }
 
 
+    fun saveProfiles(updated: List<String>, selected: String) {
+        profiles = updated.distinct()
+        selectedProfile = selected
+        prefs.edit()
+            .putString("launcher_installed_version_profiles", profiles.joinToString("\n"))
+            .putString("launcher_selected_version_profile", selectedProfile)
+            .apply()
+    }
+
     LaunchedEffect(MinecraftInstallSession.finishedProfileId) {
         val finished = MinecraftInstallSession.finishedProfileId ?: return@LaunchedEffect
         installedVersion = finished
