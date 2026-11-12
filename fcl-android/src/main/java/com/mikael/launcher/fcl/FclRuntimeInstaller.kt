@@ -12,6 +12,7 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -179,6 +180,7 @@ object FclRuntimeInstaller {
                 }
             }
             runCatching { deleteTree(staging) }
+            if (failure is CancellationException) throw failure
             if (failure is IOException) throw failure
             throw IOException("Failed to install Java ${runtime.majorVersion}: ${failure.message}", failure)
         } finally {
