@@ -2,7 +2,7 @@ name: Android UI checks
 
 on:
   push:
-    branches: [main, "feature/**"]
+    branches: [main, "feature/**", "fix/**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -105,7 +105,7 @@ jobs:
         run: test -s app/src/main/jniLibs/arm64-v8a/libhorizon_android.so
 
   build-debug-apk:
-    if: github.event_name == 'workflow_dispatch' && inputs.build_apk == true
+    if: github.ref == 'refs/heads/fix/runtime-native-lib-extraction' || (github.event_name == 'workflow_dispatch' && inputs.build_apk == true)
     name: Build Android debug APK
     needs: [verify, horizon-android-arm64]
     runs-on: ubuntu-latest
@@ -144,6 +144,31 @@ jobs:
         run: bash scripts/build-horizon-android.sh
       - name: Assemble debug APK
         run: gradle :app:assembleDebug
+      - name: Verify runtime patch libraries are packaged in APK
+        run: |
+          python3 - <<'PY'
+          import glob, zipfile
+          apks = glob.glob("app/build/outputs/apk/debug/*.apk")
+          if len(apks) != 1:
+              raise SystemExit(f"Expected exactly one debug APK, found {len(apks)}")
+          required = {
+              "lib/arm64-v8a/libawt_xawt.so",
+              "lib/arm64-v8a/libawt_headless.so",
+              "lib/arm64-v8a/libjsound.so",
+              "lib/arm64-v8a/libunpack200.so",
+              "lib/arm64-v8a/libfcl.so",
+              "lib/arm64-v8a/libpojavexec.so",
+              "lib/arm64-v8a/libpojavexec_awt.so",
+              "lib/arm64-v8a/libopenal.so",
+              "lib/arm64-v8a/libgl4es_114.so",
+          }
+          with zipfile.ZipFile(apks[0]) as apk:
+              entries = set(apk.namelist())
+          missing = sorted(required - entries)
+          if missing:
+              raise SystemExit("APK is missing required ARM64 libraries:\n" + "\n".join(missing))
+          print(f"Verified {len(required)} required ARM64 libraries in {apks[0]}")
+          PY
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

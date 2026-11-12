@@ -45,6 +45,12 @@ kotlin {
 
     packaging {
         jniLibs {
+            // RuntimeUtils.patchJava copies libawt_xawt.so and libjsound.so from
+            // ApplicationInfo.nativeLibraryDir into each installed JRE. The app
+            // must therefore extract JNI libraries to that directory at install
+            // time instead of leaving them compressed inside the APK.
+            useLegacyPackaging = true
+
             // FCL ships bytehook in its native source set and CMake also imports the AAR copy.
             // Keep one ARM64 copy when the app merges native libraries.
             pickFirsts += "lib/arm64-v8a/libbytehook.so"

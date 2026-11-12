@@ -6,12 +6,14 @@ import android.content.ContextWrapper
 import android.content.Intent
 import com.mio.JavaManager
 import com.mio.manager.RendererManager
+import com.mio.util.DisplayUtil
 import com.tungsten.fcl.activity.JVMActivity
 import com.tungsten.fcl.control.MenuType
 import com.tungsten.fcl.game.FCLGameLauncher
 import com.tungsten.fcl.setting.Accounts
 import com.tungsten.fcl.setting.Profiles
 import com.tungsten.fcl.util.JnaNatives
+import com.tungsten.fcllibrary.component.theme.ThemeEngine
 import com.tungsten.fclauncher.utils.FCLPath
 import com.tungsten.fclcore.auth.offline.OfflineAccountFactory
 import com.tungsten.fclcore.download.MaintainTask
@@ -199,6 +201,19 @@ object FclGameLaunchCoordinator {
                 check(detectedGameVersion.compareTo(selectedRenderer.maxMCver) <= 0) {
                     "${selectedRenderer.name} não suporta Minecraft $versionId; versão máxima: ${selectedRenderer.maxMCver}."
                 }
+            }
+
+            stage("inicializando métricas da tela do FCL")
+            // The upstream FCLActivity normally initializes ThemeEngine and calls
+            // DisplayUtil.updateWindowSize() in onCreate. This launcher intentionally
+            // hosts its own Compose Activity, so that FCLActivity lifecycle callback
+            // never runs. FCLGameRepository.getLaunchOptions() reads screen dimensions
+            // through AndroidUtilKt, which dereferences currentDisplayMetrics when
+            // screenWidth/screenHeight are unset. Initialize it on the UI thread before
+            // building launch arguments, matching the upstream FCLActivity contract.
+            withContext(Dispatchers.Main.immediate) {
+                ThemeEngine.getInstance().setupThemeEngine(activity)
+                DisplayUtil.updateWindowSize(activity)
             }
 
             stage("montando os argumentos de inicialização")

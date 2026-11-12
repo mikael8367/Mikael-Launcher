@@ -11,6 +11,7 @@ import com.tungsten.fclcore.util.Logging
 import java.io.File
 import java.nio.file.Paths
 import java.util.logging.Level
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -208,12 +209,9 @@ object FclEngineBootstrap {
                     }
                 }
 
-                val installedRuntimes = File(FCLPath.JAVA_PATH)
-                    .listFiles()
-                    .orEmpty()
-                    .filter { it.isDirectory && File(it, "release").isFile }
-                    .map { it.name }
-                    .sorted()
+                // Report only runtimes that pass the same version/ARM64 validation
+                // used by the installer; a stale release file is not enough.
+                val installedRuntimes = FclRuntimeInstaller.installedRuntimes()
 
                 val selectedProfile = runCatching { Profiles.getSelectedProfile() }.getOrNull()
                 val privateGameDirectory = selectedProfile?.let { profile ->
@@ -238,6 +236,15 @@ object FclEngineBootstrap {
             }.also { result ->
                 currentStatus = result
             }
+        } catch (cancelled: CancellationException) {
+            // A cancelled caller must not leave the singleton permanently stuck in
+            // "initializing"; a later screen/operation is allowed to retry bootstrap.
+            currentStatus = FclBootstrapStatus(
+                initialized = false,
+                stage = "cancelled",
+                message = "A preparação do backend FCL foi cancelada. Tente novamente."
+            )
+            throw cancelled
         } catch (error: Throwable) {
             runCatching {
                 Logging.LOG.log(Level.SEVERE, "Failed to initialize FCL engine services", error)

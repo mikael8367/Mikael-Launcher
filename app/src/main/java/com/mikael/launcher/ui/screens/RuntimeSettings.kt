@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import com.mikael.launcher.fcl.FclEngineBootstrap
 import com.mikael.launcher.fcl.FclJavaRuntime
 import com.mikael.launcher.fcl.FclRuntimeInstaller
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import com.mikael.launcher.ui.theme.OutlineSoft
 import com.mikael.launcher.ui.theme.PrimaryGreen
@@ -154,7 +155,9 @@ fun RuntimeSettingsPanel() {
                         }
                         installedRuntimes = FclRuntimeInstaller.installedRuntimes().toSet()
                         installDetail = result.message
-                    } catch (error: Throwable) {
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
                         installDetail = "Falha: ${error.message ?: error.javaClass.simpleName}"
                     } finally {
                         installing = false
@@ -173,13 +176,17 @@ fun FirstRunRuntimeDialog(onFinished: () -> Unit) {
     val prefs = remember { context.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE) }
     var runtime by remember { mutableStateOf(prefs.getString(PREF_RUNTIME, "Java 8") ?: "Java 8") }
     var renderer by remember { mutableStateOf(prefs.getString(PREF_RENDERER, "GL4ES") ?: "GL4ES") }
+    var installing by remember { mutableStateOf(false) }
+    var installMessage by remember { mutableStateOf("O runtime será instalado agora para deixar o launcher pronto.") }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
     AlertDialog(
         onDismissRequest = { },
         title = { Text("Configuração inicial") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Text("Escolha o runtime Java que deseja preparar para instalar.", color = TextSecondary, fontSize = 12.sp)
+                Text("Escolha o runtime Java. O launcher vai instalá-lo e validar a arquitetura ARM64 antes de concluir.", color = TextSecondary, fontSize = 12.sp)
                 JAVA_RUNTIMES.forEach { option ->
                     SelectableRuntimeRow(option, runtime == option) { runtime = option }
                 }
@@ -190,17 +197,49 @@ fun FirstRunRuntimeDialog(onFinished: () -> Unit) {
                     }
                 }
                 Text("A compatibilidade depende do Android, processador gráfico e versão do Minecraft.", color = TextSecondary, fontSize = 10.sp)
+                Text(if (installing) "Instalando Java ${runtime.removePrefix("Java ")}..." else installMessage, color = TextSecondary, fontSize = 10.sp)
             }
         },
         confirmButton = {
-            Button(onClick = {
+            Button(enabled = !installing, onClick = {
+                installing = true
+                installMessage = "Preparando instalação do $runtime..."
+                scope.launch {
+                    try {
+                        val major = runtimeMajorFromLabel(runtime)
+                            ?: throw IllegalStateException("Runtime Java inválido: $runtime")
+                        val target = FclJavaRuntime.values().firstOrNull { it.majorVersion == major }
+                            ?: throw IllegalStateException("Runtime Java não suportado: $runtime")
+                        val result = FclRuntimeInstaller.install(context.applicationContext, target) { progress ->
+                            mainHandler.post { installMessage = progress.detail }
+                        }
+                        check(result.installed) { result.message }
+                        prefs.edit()
+                            .putString(PREF_RUNTIME, runtime)
+                            .putString(PREF_RENDERER, if (renderer == "VirGL") "VGPU" else renderer)
+                            .putBoolean(PREF_FIRST_RUN_DONE, true)
+                            .apply()
+                        installMessage = result.message
+                        onFinished()
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        installMessage = "Falha na instalação: ${error.message ?: error.javaClass.simpleName}"
+                    } finally {
+                        installing = false
+                    }
+                }
+            }) { Text(if (installing) "Instalando..." else "Instalar e continuar") }
+        },
+        dismissButton = {
+            TextButton(enabled = !installing, onClick = {
                 prefs.edit()
                     .putString(PREF_RUNTIME, runtime)
-                    .putString(PREF_RENDERER, renderer)
+                    .putString(PREF_RENDERER, if (renderer == "VirGL") "VGPU" else renderer)
                     .putBoolean(PREF_FIRST_RUN_DONE, true)
                     .apply()
                 onFinished()
-            }) { Text("Salvar e continuar") }
+            }) { Text("Configurar depois") }
         }
     )
 }

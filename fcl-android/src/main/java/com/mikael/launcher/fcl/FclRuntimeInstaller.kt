@@ -12,6 +12,7 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -84,10 +85,15 @@ object FclRuntimeInstaller {
         val javaPath = FCLPath.JAVA_PATH?.takeIf { it.isNotBlank() } ?: return emptyList()
         val javaRoot = File(javaPath)
         if (!javaRoot.isDirectory) return emptyList()
-        return javaRoot.listFiles()
-            .orEmpty()
-            .filter { it.isDirectory && File(it, "release").isFile }
-            .map { it.name }
+        // A release file alone does not prove that a runtime is usable. Validate
+        // the selected supported JRE's version, executable and ARM64 ELF binaries
+        // before exposing it as installed in the settings UI.
+        return FclJavaRuntime.values()
+            .filter { runtime ->
+                val root = File(javaRoot, runtime.directoryName)
+                root.isDirectory && runCatching { validateRuntime(root, runtime) }.isSuccess
+            }
+            .map { it.directoryName }
             .sorted()
     }
 
@@ -179,6 +185,7 @@ object FclRuntimeInstaller {
                 }
             }
             runCatching { deleteTree(staging) }
+            if (failure is CancellationException) throw failure
             if (failure is IOException) throw failure
             throw IOException("Failed to install Java ${runtime.majorVersion}: ${failure.message}", failure)
         } finally {
