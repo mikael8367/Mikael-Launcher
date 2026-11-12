@@ -189,7 +189,7 @@ object FclGameLaunchCoordinator {
             ) ?: throw IllegalStateException(
                 "O renderizador selecionado não está registrado no FCL. Escolha GL4ES nas configurações."
             )
-            val detectedGameVersion = GameVersionNumber.asGameVersion(gameVersion ?: versionId.substringBefore('-'))
+            val detectedGameVersion = GameVersionNumber.asGameVersion(gameVersion?.takeIf { it.isNotBlank() } ?: versionId.substringBefore('-'))
             if (selectedRenderer.minMCver.isNotBlank()) {
                 check(detectedGameVersion.compareTo(selectedRenderer.minMCver) >= 0) {
                     "${selectedRenderer.name} não suporta Minecraft $versionId; versão mínima: ${selectedRenderer.minMCver}."
