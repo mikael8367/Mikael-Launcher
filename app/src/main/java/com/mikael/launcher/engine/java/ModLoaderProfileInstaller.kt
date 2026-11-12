@@ -5,13 +5,19 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-enum class SupportedProfileLoader(val displayName: String, val metadataBase: String) {
-    FABRIC("Fabric", "https://meta.fabricmc.net/v2"),
-    QUILT("Quilt", "https://meta.quiltmc.org/v3")
+enum class SupportedProfileLoader(
+    val displayName: String,
+    val metadataBase: String,
+    val defaultRepository: String
+) {
+    FABRIC("Fabric", "https://meta.fabricmc.net/v2", "https://maven.fabricmc.net/"),
+    QUILT("Quilt", "https://meta.quiltmc.org/v3", "https://maven.quiltmc.org/repository/release/")
 }
 
 data class LoaderRelease(
@@ -43,10 +49,7 @@ class ModLoaderProfileInstaller(
         loader: SupportedProfileLoader
     ): List<LoaderRelease> = withContext(Dispatchers.IO) {
         requireSafeId(minecraftVersion)
-        val endpoint = when (loader) {
-            SupportedProfileLoader.FABRIC -> "${loader.metadataBase}/versions/loader/$minecraftVersion"
-            SupportedProfileLoader.QUILT -> "${loader.metadataBase}/versions/loader/$minecraftVersion"
-        }
+        val endpoint = "${loader.metadataBase}/versions/loader/$minecraftVersion"
         val array = JSONArray(readHttps(endpoint))
         buildList {
             for (i in 0 until array.length()) {
@@ -84,7 +87,7 @@ class ModLoaderProfileInstaller(
         var installedCount = 0
         for (i in 0 until profileLibraries.length()) {
             val library = profileLibraries.optJSONObject(i) ?: continue
-            val artifact = resolveLibrary(library) ?: continue
+            val artifact = loaderLibraryArtifact(library, loader.defaultRepository) ?: continue
             val path = artifact.getString("path")
             val target = safeResolve(root, "libraries/$path")
             downloadArtifact(artifact.getString("url"), target, artifact.optString("sha1").takeIf { it.isNotBlank() }, artifact.optLong("size", -1L).takeIf { it >= 0L })
@@ -97,24 +100,41 @@ class ModLoaderProfileInstaller(
         val targetProfile = File(profileDir, "$profileId.json")
         writeAtomically(targetProfile, merged.toString(2).toByteArray(Charsets.UTF_8))
 
+        // The merged profile has no inheritsFrom: FCL's DefaultGameRepository
+        // resolves the game JAR as versions/<profileId>/<profileId>.jar. Copy the
+        // already-verified base client instead of forcing FCL to re-download it.
+        copyBaseClientJar(root, minecraftVersion, profileId, base)
+
         LoaderInstallResult(profileId, loader, loaderVersion, installedCount, targetProfile)
     }
 
-    private fun resolveLibrary(library: JSONObject): JSONObject? {
-        val coordinate = library.optString("name").trim()
-        if (coordinate.isBlank()) return null
-        val artifact = library.optJSONObject("downloads")?.optJSONObject("artifact")
-        val path = artifact?.optString("path").orEmpty().ifBlank { minecraftMavenPath(coordinate) }
-        requireSafeRelativePath(path)
-        val explicitUrl = artifact?.optString("url").orEmpty().trim()
-        val repository = library.optString("url").trim().ifBlank { "https://maven.fabricmc.net/" }
-        val url = explicitUrl.ifBlank { repository.trimEnd('/') + "/" + path }
-        require(url.startsWith("https://")) { "Repositório inseguro para a biblioteca $coordinate." }
-        val hash = artifact?.optString("sha1").orEmpty()
-        require(hash.isBlank() || hash.matches(Regex("[a-fA-F0-9]{40}"))) { "SHA-1 inválido para $coordinate." }
-        val size = artifact?.optLong("size", -1L) ?: -1L
-        require(size >= -1L) { "Tamanho inválido para $coordinate." }
-        return JSONObject().put("path", path).put("url", url).put("sha1", hash).put("size", size)
+    private fun copyBaseClientJar(root: File, minecraftVersion: String, profileId: String, base: JSONObject) {
+        val baseJar = safeResolve(root, "versions/$minecraftVersion/$minecraftVersion.jar")
+        if (!baseJar.isFile) {
+            error("O client base de $minecraftVersion não está instalado; o perfil $profileId ficaria sem JAR executável.")
+        }
+        val profileJar = safeResolve(root, "versions/$profileId/$profileId.jar")
+        val declaredSize = base.optJSONObject("downloads")
+            ?.optJSONObject("client")
+            ?.optLong("size", -1L) ?: -1L
+        if (profileJar.isFile && (declaredSize <= 0L || profileJar.length() == declaredSize)) return
+        val temp = File(profileJar.parentFile, profileJar.name + ".tmp")
+        try {
+            baseJar.copyTo(temp, overwrite = true)
+            if (declaredSize > 0L && temp.length() != declaredSize) {
+                error("O client base não corresponde ao tamanho declarado nos metadados oficiais.")
+            }
+            if (profileJar.exists() && !profileJar.delete()) {
+                error("Não foi possível atualizar o client do perfil $profileId.")
+            }
+            if (!temp.renameTo(profileJar)) {
+                temp.copyTo(profileJar, overwrite = true)
+                temp.delete()
+            }
+        } catch (error: Throwable) {
+            temp.delete()
+            throw error
+        }
     }
 
     private suspend fun downloadArtifact(url: String, target: File, expectedSha1: String?, expectedSize: Long?) {
@@ -127,7 +147,7 @@ class ModLoaderProfileInstaller(
                 val connection = openHttps(url)
                 try {
                     connection.inputStream.use { input ->
-                        part.outputStream().buffered().use { output -> input.copyTo(output) }
+                        FileOutputStream(part).buffered().use { output -> input.copyTo(output) }
                     }
                 } finally {
                     connection.disconnect()
@@ -143,7 +163,7 @@ class ModLoaderProfileInstaller(
                     part.delete()
                 }
             } catch (error: Throwable) {
-                part.delete()
+                if (error !is IOException) part.delete()
                 throw error
             }
         }
@@ -244,6 +264,35 @@ class ModLoaderProfileInstaller(
     }
 }
 
+/**
+ * Resolves a loader library artifact against the loader's own default Maven
+ * repository. Quilt profiles reference libraries hosted on maven.quiltmc.org;
+ * falling back to maven.fabricmc.net would produce 404s for Quilt-only artifacts.
+ */
+internal fun loaderLibraryArtifact(library: JSONObject, defaultRepository: String): JSONObject? {
+    val coordinate = library.optString("name").trim()
+    if (coordinate.isBlank()) return null
+    val artifact = library.optJSONObject("downloads")?.optJSONObject("artifact")
+    val path = artifact?.optString("path").orEmpty().ifBlank { minecraftMavenPath(coordinate) }
+    requireSafeRelativePathValue(path)
+    val explicitUrl = artifact?.optString("url").orEmpty().trim()
+    val repository = library.optString("url").trim().ifBlank { defaultRepository }
+    val url = explicitUrl.ifBlank { repository.trimEnd('/') + "/" + path }
+    require(url.startsWith("https://")) { "Repositório inseguro para a biblioteca $coordinate." }
+    val hash = artifact?.optString("sha1").orEmpty()
+    require(hash.isBlank() || hash.matches(Regex("[a-fA-F0-9]{40}"))) { "SHA-1 inválido para $coordinate." }
+    val size = artifact?.optLong("size", -1L) ?: -1L
+    require(size >= -1L) { "Tamanho inválido para $coordinate." }
+    return JSONObject().put("path", path).put("url", url).put("sha1", hash).put("size", size)
+}
+
+private fun requireSafeRelativePathValue(path: String) {
+    require(path.isNotBlank() && !path.startsWith('/') && !path.contains('\\') &&
+        path.split('/').none { it.isBlank() || it == "." || it == ".." }) {
+        "Caminho de biblioteca inválido."
+    }
+}
+
 internal fun mergeLoaderProfile(
     base: JSONObject,
     loaderProfile: JSONObject,
@@ -280,6 +329,9 @@ internal fun mergeLoaderProfile(
     }
     if (loaderProfile.has("type")) merged.put("type", loaderProfile.get("type"))
     if (loaderProfile.has("logging")) merged.put("logging", loaderProfile.get("logging"))
+    // Keep the base client's download metadata (downloads.client and assetIndex)
+    // so integrity checks and any fallback re-download still reference the
+    // official vanilla artifacts instead of a nonexistent loader-specific JAR.
     return merged
 }
 
