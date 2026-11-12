@@ -20,9 +20,11 @@ import com.mikael.launcher.fcl.FclEngineBootstrap
 import com.mikael.launcher.ui.screens.MinecraftInstallSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Mantém downloads/instalações ativos quando a Activity sai da tela.
@@ -82,9 +84,11 @@ class MinecraftInstallForegroundService : Service() {
                 MinecraftInstallSession.failExternal(failure.message ?: "Falha desconhecida durante a instalação.")
                 updateNotification("Falha na instalação", null, null, false)
             } finally {
-                workerStarted = false
-                stopForeground(STOP_FOREGROUND_DETACH)
-                stopSelf(startId)
+                withContext(NonCancellable + Dispatchers.Main) {
+                    workerStarted = false
+                    stopForeground(STOP_FOREGROUND_DETACH)
+                    stopSelf(startId)
+                }
             }
         }
         return START_NOT_STICKY
